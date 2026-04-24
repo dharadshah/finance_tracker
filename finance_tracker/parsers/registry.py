@@ -1,0 +1,31 @@
+from finance_tracker.parsers.base import BaseStatementParser
+from finance_tracker.parsers.icici_bank import ICICIBankParser
+
+# Registry maps a short key to the parser class.
+# To add a new bank: import its parser and add one line here.
+PARSER_REGISTRY: dict[str, type[BaseStatementParser]] = {
+    "icici_bank": ICICIBankParser,
+    # "yes_bank":   YesBankParser,     # Phase 2 additions
+    # "axis_bank":  AxisBankParser,
+    # "hdfc_bank":  HDFCBankParser,
+    # "sbi":        SBIParser,
+}
+
+
+def get_parser(key: str) -> BaseStatementParser:
+    """
+    Returns an instance of the parser for the given key.
+    Raises KeyError with a helpful message if not found.
+    """
+    key = key.lower().strip()
+    cls = PARSER_REGISTRY.get(key)
+    if cls is None:
+        available = ", ".join(sorted(PARSER_REGISTRY.keys()))
+        raise KeyError(
+            f"No parser registered for '{key}'. Available parsers: {available}"
+        )
+    return cls()
+
+
+def available_parsers() -> list[str]:
+    return sorted(PARSER_REGISTRY.keys())
