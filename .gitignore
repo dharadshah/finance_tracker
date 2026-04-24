@@ -1,0 +1,40 @@
+# Environment
+.env
+
+# Database (never commit your personal financial data)
+data/
+*.db
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Alembic (keep versions, ignore compiled)
+migrations/versions/__pycache__/
+
+# Uploaded statement files (personal data)
+statements/
+uploads/
