@@ -1,13 +1,15 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-from sqlalchemy import select, and_, delete
+from sqlalchemy import select, and_
+import plotly.express as px
 
 from finance_tracker.database import get_session
 from finance_tracker.models import Transaction, Account, Category
 from finance_tracker.repositories.account_repository import AccountRepository
 from finance_tracker.repositories.transaction_repository import TransactionRepository
 from finance_tracker.services.categorisation.pipeline import CategorizationPipeline
+from finance_tracker.models.categorisation import CategorizationLog
 
 
 def _account_choices() -> dict[str, int | None]:
@@ -28,14 +30,14 @@ def _category_names() -> list[str]:
 
 
 def _confidence_label(log_source: str | None) -> str:
-    icons = {"rule": "Rule", "learned": "Learned", "ollama": "Ollama", "manual": "Manual"}
-    return icons.get(log_source or "", "—")
+    labels = {"rule": "Rule", "learned": "Learned", "ollama": "Ollama", "manual": "Manual"}
+    return labels.get(log_source or "", "-")
 
 
 def render():
     st.title("Transactions")
 
-    # ── Filters ──────────────────────────────────────────────────────────────
+    # Filters
     col1, col2, col3 = st.columns(3)
     account_map = _account_choices()
 
@@ -50,7 +52,7 @@ def render():
     with col4:
         dr_cr_filter = st.radio("Type", options=["All", "DR", "CR"], horizontal=True)
     with col5:
-        search_text = st.text_input("Search description", placeholder="Swiggy, Salary…")
+        search_text = st.text_input("Search description", placeholder="Swiggy, Salary...")
     with col6:
         source_filter = st.selectbox(
             "Categorised by",
@@ -64,7 +66,7 @@ def render():
         st.info("Set filters and click Apply Filters.")
         return
 
-    # ── Load transactions ─────────────────────────────────────────────────────
+    # Load transactions
     account_id = account_map[account_label]
 
     with get_session() as session:
@@ -80,10 +82,6 @@ def render():
             stmt = stmt.where(Transaction.account_id == account_id)
         stmt = stmt.order_by(Transaction.txn_date.desc())
         rows_raw = session.execute(stmt).all()
-
-        # Load latest categorisation source per transaction
-        from finance_tracker.models.categorisation import CategorizationLog
-        from sqlalchemy import func
 
         log_subq = (
             select(
@@ -102,6 +100,12 @@ def render():
             for row in session.execute(select(log_subq)).all()
         }
 
+        # Build category map: name -> (parent_name, txn_type)
+        cat_map = {
+            c.name: (c.parent_name or c.name, c.txn_type)
+            for c in session.execute(select(Category)).scalars()
+        }
+
     rows = []
     for txn, acct in rows_raw:
         desc = txn.description or ""
@@ -115,6 +119,9 @@ def render():
         if source_filter not in ("All", "uncategorised") and src != source_filter:
             continue
 
+        cat_name = txn.category or "Uncategorised"
+        parent, txn_type = cat_map.get(cat_name, (cat_name, "expense"))
+
         rows.append({
             "ID": txn.id,
             "Date": txn.txn_date.strftime("%d %b %Y"),
@@ -122,9 +129,11 @@ def render():
             "Description": desc,
             "Type": txn.dr_cr,
             "Amount (INR)": float(txn.amount),
-            "Category": txn.category or "Uncategorised",
+            "Category": cat_name,
             "Source": _confidence_label(src),
             "_institution": acct.institution,
+            "_parent_category": parent,
+            "_txn_type": txn_type,
         })
 
     if not rows:
@@ -133,7 +142,7 @@ def render():
 
     df = pd.DataFrame(rows)
 
-    # ── Metrics ───────────────────────────────────────────────────────────────
+    # Metrics
     total_dr = df[df["Type"] == "DR"]["Amount (INR)"].sum()
     total_cr = df[df["Type"] == "CR"]["Amount (INR)"].sum()
     m1, m2, m3 = st.columns(3)
@@ -141,15 +150,152 @@ def render():
     m2.metric("Total debits", f"{total_dr:,.2f}")
     m3.metric("Total credits", f"{total_cr:,.2f}")
 
-    # ── Table with selection ───────────────────────────────────────────────────
-    display_cols = ["ID", "Date", "Account", "Description", "Type",
-                    "Amount (INR)", "Category", "Source"]
+    # Pie charts — use txn_type to correctly classify
+    expense_df = df[df["_txn_type"] == "expense"].copy()
+    income_df = df[df["_txn_type"] == "income"].copy()
 
+    if not expense_df.empty or not income_df.empty:
+        st.markdown("#### Spending Overview")
+        pie1, pie2 = st.columns(2)
+
+        with pie1:
+            st.markdown("**Expenses by Category**")
+            if not expense_df.empty:
+                exp_grouped = (
+                    expense_df.groupby("_parent_category")["Amount (INR)"]
+                    .sum()
+                    .reset_index()
+                    .rename(columns={"_parent_category": "Category"})
+                    .sort_values("Amount (INR)", ascending=False)
+                )
+                fig1 = px.pie(
+                    exp_grouped,
+                    names="Category",
+                    values="Amount (INR)",
+                    hole=0.3,
+                )
+                fig1.update_traces(textposition="inside", textinfo="percent+label")
+                fig1.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
+                st.plotly_chart(fig1, use_container_width=True)
+            else:
+                st.info("No expense transactions.")
+
+        with pie2:
+            st.markdown("**Income by Category**")
+            if not income_df.empty:
+                inc_grouped = (
+                    income_df.groupby("_parent_category")["Amount (INR)"]
+                    .sum()
+                    .reset_index()
+                    .rename(columns={"_parent_category": "Category"})
+                    .sort_values("Amount (INR)", ascending=False)
+                )
+                fig2 = px.pie(
+                    inc_grouped,
+                    names="Category",
+                    values="Amount (INR)",
+                    hole=0.3,
+                )
+                fig2.update_traces(textposition="inside", textinfo="percent+label")
+                fig2.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
+                st.plotly_chart(fig2, use_container_width=True)
+            else:
+                st.info("No income transactions.")
+
+    # Delete all matching
+    with st.expander("Danger zone"):
+        st.caption(f"Delete all {len(rows)} transactions matching current filters.")
+        if st.button("Delete all matching transactions", type="secondary", key="delete_all"):
+            st.session_state["pending_delete_all"] = [r["ID"] for r in rows]
+
+    if "pending_delete_all" in st.session_state:
+        ids_to_delete = st.session_state["pending_delete_all"]
+        st.warning(
+            f"Confirm: permanently delete ALL {len(ids_to_delete)} matching transaction(s)? "
+            "This cannot be undone."
+        )
+        conf1, conf2 = st.columns(2)
+        with conf1:
+            if st.button("Yes, delete all", type="primary", key="confirm_delete_all"):
+                with get_session() as session:
+                    TransactionRepository(session).delete_by_ids(ids_to_delete)
+                del st.session_state["pending_delete_all"]
+                if "txn_rows" in st.session_state:
+                    del st.session_state["txn_rows"]
+                st.success(f"Deleted {len(ids_to_delete)} transaction(s).")
+                st.rerun()
+        with conf2:
+            if st.button("Cancel", key="cancel_delete_all"):
+                del st.session_state["pending_delete_all"]
+                st.rerun()
+
+    # Transactions table
     st.markdown("#### Transactions")
-    st.caption("Select rows to bulk-delete or correct categories.")
 
+    # Add checkbox column for selection
+    df_display = df[["ID", "Date", "Account", "Description", "Type",
+                      "Amount (INR)", "Category", "Source"]].copy()
+
+    # Bulk actions ABOVE table so they survive reruns
+    st.markdown("##### Bulk Actions")
+    act_col1, act_col2, act_col3 = st.columns(3)
+
+    with act_col1:
+        cat_names = _category_names()
+        new_cat = st.selectbox("Correct category", options=cat_names, key="bulk_cat_select")
+
+    with act_col2:
+        st.markdown(" ")
+        st.markdown(" ")
+        if st.button("Apply to selected", type="primary", key="apply_cat"):
+            selected_ids = st.session_state.get("selected_ids", [])
+            institution = st.session_state.get("selected_institution", "")
+            if not selected_ids:
+                st.warning("No rows selected.")
+            else:
+                with get_session() as session:
+                    pipeline = CategorizationPipeline(session, institution)
+                    for txn_id in selected_ids:
+                        pipeline.apply_manual_correction(txn_id, new_cat)
+                st.session_state["selected_ids"] = []
+                st.success(f"Category updated to '{new_cat}' for {len(selected_ids)} transaction(s).")
+                st.rerun()
+
+    with act_col3:
+        st.markdown(" ")
+        st.markdown(" ")
+        selected_ids_for_label = st.session_state.get("selected_ids", [])
+        if st.button(
+            f"Delete selected ({len(selected_ids_for_label)})",
+            type="secondary",
+            key="delete_selected",
+        ):
+            if not selected_ids_for_label:
+                st.warning("No rows selected.")
+            else:
+                st.session_state["pending_delete"] = selected_ids_for_label
+
+    # Delete selected confirmation
+    if "pending_delete" in st.session_state:
+        ids_to_delete = st.session_state["pending_delete"]
+        st.warning(f"Confirm: permanently delete {len(ids_to_delete)} transaction(s)?")
+        conf1, conf2 = st.columns(2)
+        with conf1:
+            if st.button("Yes, delete", type="primary", key="confirm_delete"):
+                with get_session() as session:
+                    TransactionRepository(session).delete_by_ids(ids_to_delete)
+                del st.session_state["pending_delete"]
+                st.session_state["selected_ids"] = []
+                st.success(f"Deleted {len(ids_to_delete)} transaction(s).")
+                st.rerun()
+        with conf2:
+            if st.button("Cancel", key="cancel_delete"):
+                del st.session_state["pending_delete"]
+                st.rerun()
+
+    # Render table with selection
     event = st.dataframe(
-        df[display_cols],
+        df_display,
         use_container_width=True,
         hide_index=True,
         on_select="rerun",
@@ -157,61 +303,20 @@ def render():
         column_config={
             "Amount (INR)": st.column_config.NumberColumn(format="%.2f"),
         },
+        key="txn_table",
     )
 
+    # Capture selection AFTER table renders
     selected_indices = event.selection.rows if event.selection else []
-    selected_ids = [rows[i]["ID"] for i in selected_indices] if selected_indices else []
+    if selected_indices:
+        st.session_state["selected_ids"] = [rows[i]["ID"] for i in selected_indices]
+        st.session_state["selected_institution"] = rows[selected_indices[0]]["_institution"]
+        st.caption(f"{len(selected_indices)} row(s) selected. Use actions above.")
+    elif "selected_ids" not in st.session_state:
+        st.session_state["selected_ids"] = []
 
-    # ── Bulk actions ──────────────────────────────────────────────────────────
-    if selected_ids:
-        st.markdown(f"**{len(selected_ids)} row(s) selected**")
-        act_col1, act_col2 = st.columns(2)
-
-        with act_col1:
-            st.markdown("##### Correct category")
-            cat_names = _category_names()
-            new_cat = st.selectbox(
-                "New category",
-                options=cat_names,
-                key="bulk_cat_select",
-            )
-            if st.button("Apply to selected", type="primary", key="apply_cat"):
-                institution = rows[selected_indices[0]]["_institution"]
-                with get_session() as session:
-                    pipeline = CategorizationPipeline(session, institution)
-                    for txn_id in selected_ids:
-                        pipeline.apply_manual_correction(txn_id, new_cat)
-                st.success(
-                    f"Category updated to '{new_cat}' for {len(selected_ids)} transaction(s)."
-                )
-                st.rerun()
-
-        with act_col2:
-            st.markdown("##### Delete selected")
-            st.caption("This cannot be undone.")
-            if st.button(
-                f"Delete {len(selected_ids)} transaction(s)",
-                type="secondary",
-                key="delete_selected",
-            ):
-                st.session_state["pending_delete"] = selected_ids
-
-    # ── Delete confirmation ───────────────────────────────────────────────────
-    if "pending_delete" in st.session_state:
-        ids_to_delete = st.session_state["pending_delete"]
-        st.warning(
-            f"Confirm: permanently delete {len(ids_to_delete)} transaction(s)? "
-            "This cannot be undone."
-        )
-        conf1, conf2 = st.columns(2)
-        with conf1:
-            if st.button("Yes, delete", type="primary", key="confirm_delete"):
-                with get_session() as session:
-                    TransactionRepository(session).delete_by_ids(ids_to_delete)
-                del st.session_state["pending_delete"]
-                st.success(f"Deleted {len(ids_to_delete)} transaction(s).")
-                st.rerun()
-        with conf2:
-            if st.button("Cancel", key="cancel_delete"):
-                del st.session_state["pending_delete"]
-                st.rerun()
+    # Clear selection
+    if st.session_state.get("selected_ids"):
+        if st.button("Clear selection", key="clear_selection"):
+            st.session_state["selected_ids"] = []
+            st.rerun()

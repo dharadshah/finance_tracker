@@ -93,14 +93,6 @@ class BaseStatementParser(ABC):
         ...
 
     def _clean_description(self, raw: str) -> str:
-        """
-        Strips UPI transaction IDs, reference hashes, and other noise
-        from description strings. Subclasses may override for custom logic.
-
-        ICICI UPI format:
-        UPI/VENDOR NAME/upihandle@bank/memo/BANK NAME/txnid/hash/
-        We keep: UPI / VENDOR NAME / memo
-        """
         import re
 
         desc = raw.strip().rstrip("/")
@@ -113,22 +105,39 @@ class BaseStatementParser(ABC):
         )
         if upi_match:
             vendor = upi_match.group(1).strip().title()
-            memo = upi_match.group(2).strip()
-            if memo.upper() in ("UPI", "PAY VIA RAZORPAY", "MANDATEEXE", "PAY VIA RAZO"):
-                return f"UPI / {vendor}"
-            return f"UPI / {vendor} / {memo}"
+            memo = upi_match.group(2).strip().lower()
 
-        # UPL (UPI collect / pull) — strip reference
+            # Salary/wage payments — detect by memo keywords
+            salary_keywords = ("salary", "sal", "cooking", "cook", "wages", "stipend")
+            if any(kw in memo for kw in salary_keywords):
+                return f"Salary / {vendor}"
+
+            generic_memos = ("upi", "pay via razorpay", "mandateexe", "pay via razo")
+            if memo in generic_memos:
+                return f"UPI / {vendor}"
+
+            return f"UPI / {vendor} / {memo.title()}"
+
+        # UPL (UPI collect / pull) — detect wallet vs generic
         upl_match = re.match(r"UPL/\d+/(\w+)/.*", desc, re.IGNORECASE)
         if upl_match:
+            mode = upl_match.group(1).upper()
+            if mode == "UPI":
+                return "UPI Wallet"
             return f"UPI Collect / {upl_match.group(1)}"
 
-        # IMPS transfers
+        # IMPS transfers — detect inter-bank transfers by bank name in description
         imps_match = re.match(
-            r"MMT/IMPS/\d+/(?:IMPS/)?([^/]+)/", desc, re.IGNORECASE
+            r"MMT/IMPS/\d+/(?:IMPS/)?([^/]+)/([^/]*)",
+            desc,
+            re.IGNORECASE,
         )
         if imps_match:
-            return f"IMPS / {imps_match.group(1).strip().title()}"
+            payee = imps_match.group(1).strip().title()
+            bank = imps_match.group(2).strip().title()
+            if bank:
+                return f"Transfer / {payee} / {bank}"
+            return f"IMPS / {payee}"
 
         # ACH payments — keep the payee name
         ach_match = re.match(r"ACH/([^/]+)/", desc, re.IGNORECASE)
@@ -139,6 +148,12 @@ class BaseStatementParser(ABC):
         neft_match = re.match(r"NEFT-\w+-([^-]+)-", desc, re.IGNORECASE)
         if neft_match:
             return f"NEFT / {neft_match.group(1).strip().title()}"
+
+        # BIL/INFT (bill payment via internet fund transfer)
+        bil_inft_match = re.match(r"BIL/INFT/\w+/\w+/+\s*(.+)", desc, re.IGNORECASE)
+        if bil_inft_match:
+            payee = bil_inft_match.group(1).strip().title()
+            return f"Fund Transfer / {payee}"
 
         # INF/INFT (internet fund transfer)
         inft_match = re.match(r"INF/INFT/\d+/(.+)", desc, re.IGNORECASE)
@@ -155,10 +170,14 @@ class BaseStatementParser(ABC):
         if cam_match:
             return f"Cash Withdrawal / {cam_match.group(1).strip()}"
 
-        # Sweep entries from linked FD
-        sweep_match = re.match(r"(\d+): (.+)", desc)
+        # FD sweep and closure entries — e.g. "454013001072: Rev Sweep From"
+        sweep_match = re.match(r"(\d+):\s*(.+)", desc)
         if sweep_match:
-            return f"FD Sweep / {sweep_match.group(2).strip().title()}"
+            label = sweep_match.group(2).strip().lower()
+            fd_keywords = ("sweep", "closure", "proceed", "rev sweep", "closure proceeds")
+            if any(kw in label for kw in fd_keywords):
+                return "Transfer from FD"
+            return f"FD / {sweep_match.group(2).strip().title()}"
 
         # Interest credit
         if "Int.Pd" in desc or "Interest" in desc.title():

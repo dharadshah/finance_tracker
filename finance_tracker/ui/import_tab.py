@@ -3,6 +3,8 @@ import pandas as pd
 from pathlib import Path
 import tempfile
 import os
+from finance_tracker.repositories.account_repository import AccountRepository
+from finance_tracker.database import get_session
 
 from finance_tracker.parsers.registry import available_parsers, PARSER_REGISTRY
 from finance_tracker.services.import_service import ImportService
@@ -34,11 +36,16 @@ def render():
         parser_choices = [_parser_label(k) for k in available_parsers()]
         parser_label = st.selectbox("Bank / parser", options=parser_choices)
 
-        account_id_str = st.text_input(
-            "Account ID (optional)",
-            placeholder="Leave blank to auto-match or create",
-            help="Find your account ID on the Accounts page.",
+        with get_session() as _sess:
+            _accounts = AccountRepository(_sess).get_all(include_inactive=False)
+            _account_options = {f"{a.name} [ID:{a.id}]": a.id for a in _accounts}
+
+        account_options_with_placeholder = {"-- Select an account --": None} | _account_options
+        account_label = st.selectbox(
+            "Account",
+            options=list(account_options_with_placeholder.keys()),
         )
+        account_id = account_options_with_placeholder[account_label]
 
         import_btn = st.button("Import Statement", type="primary", use_container_width=True)
 
@@ -51,13 +58,9 @@ def render():
             else:
                 parser_key = _key_from_label(parser_label)
 
-                account_id = None
-                if account_id_str.strip():
-                    try:
-                        account_id = int(account_id_str.strip())
-                    except ValueError:
-                        st.error("Account ID must be a number.")
-                        return
+                if account_id is None:
+                    st.error("Please select an account before importing.")
+                    return
 
                 # Save uploaded file to a temp location
                 suffix = Path(uploaded_file.name).suffix

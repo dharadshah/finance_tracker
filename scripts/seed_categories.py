@@ -46,6 +46,8 @@ DEFAULT_CATEGORIES = [
     ("Water", "Housing", "expense"),
     ("Internet / Broadband", "Housing", "expense"),
     ("Home Supplies", "Housing", "expense"),
+    ("Maid Salary", "Housing", "expense"),
+
 
     # Health
     ("Doctor / Consultation", "Health", "expense"),
@@ -59,6 +61,7 @@ DEFAULT_CATEGORIES = [
     ("Electronics", "Shopping", "expense"),
     ("Amazon / Flipkart", "Shopping", "expense"),
     ("Personal Care", "Shopping", "expense"),
+    ("UPI Wallet", "Shopping", "expense"),
 
     # Entertainment
     ("OTT Subscriptions", "Entertainment", "expense"),
@@ -75,6 +78,7 @@ DEFAULT_CATEGORIES = [
 
     # Investments
     ("Mutual Fund SIP", "Investments", "investment"),
+    ("Mutual Fund Lumpsum", "Investments", "investment"),
     ("Stock Purchase", "Investments", "investment"),
     ("PPF / EPF", "Investments", "investment"),
     ("FD / RD", "Investments", "investment"),

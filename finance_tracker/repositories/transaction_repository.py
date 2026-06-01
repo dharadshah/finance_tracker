@@ -59,15 +59,28 @@ class TransactionRepository:
         return inserted, skipped
 
     def _is_duplicate(self, account_id: int, p: ParsedTransaction) -> bool:
-        stmt = select(Transaction.id).where(
-            and_(
-                Transaction.account_id == account_id,
-                Transaction.txn_date == p.txn_date,
-                Transaction.amount == p.amount,
-                Transaction.dr_cr == p.dr_cr,
-                Transaction.description == p.description,
-            )
-        ).limit(1)
+        # If we have a reference number, use it as the primary dedup key
+        if p.reference_number:
+            stmt = select(Transaction.id).where(
+                and_(
+                    Transaction.account_id == account_id,
+                    Transaction.txn_date == p.txn_date,
+                    Transaction.amount == p.amount,
+                    Transaction.dr_cr == p.dr_cr,
+                    Transaction.reference_number == p.reference_number,
+                )
+            ).limit(1)
+        else:
+            # Fall back to description-based dedup for transactions without a reference
+            stmt = select(Transaction.id).where(
+                and_(
+                    Transaction.account_id == account_id,
+                    Transaction.txn_date == p.txn_date,
+                    Transaction.amount == p.amount,
+                    Transaction.dr_cr == p.dr_cr,
+                    Transaction.description == p.description,
+                )
+            ).limit(1)
         return self._session.execute(stmt).scalar() is not None
 
     def get_by_account(
