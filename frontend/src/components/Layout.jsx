@@ -5,6 +5,7 @@ const navItems = [
   { path: '/import', label: 'Import' },
   { path: '/transactions', label: 'Transactions' },
   { path: '/categories', label: 'Categories' },
+  { path: '/rules', label: 'Rules' },
 ]
 
 export default function Layout({ children }) {

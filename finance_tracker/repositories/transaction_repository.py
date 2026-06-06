@@ -46,6 +46,7 @@ class TransactionRepository:
                 amount=p.amount,
                 dr_cr=p.dr_cr,
                 description=p.description,
+                raw_description=p.raw_description,  # add this line
                 reference_number=p.reference_number,
                 notes=p.mode,
                 source_file=p.source_file,

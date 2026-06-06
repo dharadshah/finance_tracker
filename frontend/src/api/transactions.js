@@ -11,3 +11,5 @@ export const bulkCorrectCategory = (transactionIds, categoryName) =>
 export const bulkDelete = (transactionIds) =>
   client.post('/transactions/bulk-delete', { transaction_ids: transactionIds })
 export const deleteTransaction = (id) => client.delete(`/transactions/${id}`)
+export const deleteFiltered = (params) =>
+  client.post('/transactions/delete-filtered', {}, { params })

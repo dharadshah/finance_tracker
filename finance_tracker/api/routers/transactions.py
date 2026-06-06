@@ -21,6 +21,7 @@ class TransactionResponse(BaseModel):
     amount: float
     dr_cr: str
     description: str
+    raw_description: str | None  
     category: str | None
     reference_number: str | None
     notes: str | None
@@ -109,6 +110,7 @@ def list_transactions(
                 amount=float(txn.amount),
                 dr_cr=txn.dr_cr,
                 description=txn.description,
+                raw_description=txn.raw_description,
                 category=txn.category,
                 reference_number=txn.reference_number,
                 notes=txn.notes,
@@ -152,6 +154,37 @@ def bulk_delete(payload: BulkDeleteRequest):
         deleted = repo.delete_by_ids(payload.transaction_ids)
     return {"message": f"Deleted {deleted} transaction(s)"}
 
+@router.post("/delete-filtered", response_model=dict)
+def delete_filtered(
+    account_id: int | None = Query(None),
+    from_date: date | None = Query(None),
+    to_date: date | None = Query(None),
+    dr_cr: str | None = Query(None),
+    search: str | None = Query(None),
+    category: str | None = Query(None),
+):
+    with get_session() as session:
+        stmt = select(Transaction.id)
+        if account_id:
+            stmt = stmt.where(Transaction.account_id == account_id)
+        if from_date:
+            stmt = stmt.where(Transaction.txn_date >= from_date)
+        if to_date:
+            stmt = stmt.where(Transaction.txn_date <= to_date)
+        if dr_cr:
+            stmt = stmt.where(Transaction.dr_cr == dr_cr)
+        if search:
+            stmt = stmt.where(Transaction.description.ilike(f"%{search}%"))
+        if category:
+            stmt = stmt.where(Transaction.category == category)
+
+        ids = list(session.execute(stmt).scalars())
+        if not ids:
+            return {"message": "No transactions matched", "deleted": 0}
+
+        repo = TransactionRepository(session)
+        deleted = repo.delete_by_ids(ids)
+        return {"message": f"Deleted {deleted} transaction(s)", "deleted": deleted}
 
 @router.delete("/{transaction_id}", status_code=204)
 def delete_transaction(transaction_id: int):

@@ -64,6 +64,7 @@ class Transaction(Base):
         nullable=False,
     )
     description: Mapped[str] = mapped_column(String(500), nullable=False)
+    raw_description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     category: Mapped[str | None] = mapped_column(String(80), nullable=True)
     subcategory: Mapped[str | None] = mapped_column(String(80), nullable=True)
     reference_number: Mapped[str | None] = mapped_column(String(100), nullable=True)

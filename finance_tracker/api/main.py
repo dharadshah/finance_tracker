@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from finance_tracker.database import init_db
-from finance_tracker.api.routers import accounts, transactions, categories, import_
+from finance_tracker.api.routers import accounts, transactions, categories, import_, rules
 
 
 @asynccontextmanager
@@ -30,3 +30,4 @@ app.include_router(accounts.router)
 app.include_router(transactions.router)
 app.include_router(categories.router)
 app.include_router(import_.router)
+app.include_router(rules.router)
