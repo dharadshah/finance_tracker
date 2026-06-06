@@ -19,6 +19,25 @@ class NAVFetcher:
     Matches funds by scheme name using fuzzy word matching.
     """
 
+    # Manual overrides: Kuvera name -> exact AMFI name
+    MANUAL_OVERRIDES = {
+        "nippon india mid cap growth direct plan": "nippon india growth mid cap fund - direct plan growth plan - growth option",
+        "nippon india small cap growth direct plan": "nippon india small cap fund - direct plan growth plan - growth option",
+        "nippon india large cap growth direct plan": "nippon india large cap fund - direct plan growth plan - growth option",
+        "sbi psu growth direct plan": "sbi psu fund - direct plan - growth",
+        "icici prudential large cap growth direct plan": "icici prudential large cap fund (erstwhile bluechip fund) - direct plan - growth",
+        "quant small cap growth direct plan": "quant small cap fund - growth option - direct plan",
+        "quant mid cap growth direct plan": "quant mid cap fund - growth option - direct plan",
+        "quant multi cap regular growth plan": "quant multi cap fund-growth option-direct plan",
+        "quant flexi cap growth direct plan": "quant flexi cap fund - growth option-direct plan",
+        "hdfc mid cap growth direct plan": "hdfc mid cap fund - growth option - direct plan",
+        "hdfc defence growth direct plan": "hdfc defence fund - growth option - direct plan",
+        "hdfc flexicap growth direct plan": "hdfc flexi cap fund - growth option - direct plan",
+        "tata digital india growth direct plan": "tata digital india fund-direct plan-growth",
+        "sbi banking & financial services growth direct plan": "sbi banking & financial services fund - direct plan - growth",
+    }
+
+
     def fetch_and_store(self, session: Session) -> dict:
         summary = {"fetched": 0, "matched": 0, "already_current": 0, "errors": []}
 
@@ -94,7 +113,7 @@ class NAVFetcher:
 
             session.add(MFNavHistory(
                 scheme_code=scheme_code,
-                scheme_name=amfi_name,
+                scheme_name=holding.scheme_name,
                 nav_date=nav_date,
                 nav=nav,
             ))
@@ -106,7 +125,12 @@ class NAVFetcher:
         return summary
 
     def _match_name(self, held_name: str, nav_map: dict) -> tuple | None:
-        # Normalize: flexicap -> flexi cap, midcap -> mid cap etc.
+        # 0. Check manual overrides first
+        override = self.MANUAL_OVERRIDES.get(held_name)
+        if override and override in nav_map:
+            return nav_map[override]
+
+        # Normalize
         def normalize(name: str) -> str:
             return (name
                 .replace("flexicap", "flexi cap")
@@ -122,7 +146,6 @@ class NAVFetcher:
         if held_normalized in nav_map:
             return nav_map[held_normalized]
 
-        # Also try normalized nav_map keys
         for amfi_name, data in nav_map.items():
             if normalize(amfi_name) == held_normalized:
                 return data

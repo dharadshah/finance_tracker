@@ -5,6 +5,9 @@ from decimal import Decimal
 from sqlalchemy import select
 import tempfile, os
 from pathlib import Path
+from finance_tracker.services.nav_fetcher import NAVFetcher, AMFI_URL
+import httpx
+
 
 from finance_tracker.database import get_session
 from finance_tracker.models.investment import MFTransaction, MFHolding
@@ -159,3 +162,33 @@ def get_latest_nav():
         fetcher = NAVFetcher()
         navs = fetcher.get_latest_navs(session)
         return {k: {"nav": float(v[0]), "date": str(v[1])} for k, v in navs.items()}
+    
+@router.get("/nav/debug")
+def debug_nav():
+    with get_session() as session:
+        fetcher = NAVFetcher()
+        navs = fetcher.get_latest_navs(session)
+        holdings = session.execute(select(MFHolding)).scalars().all()
+        return {
+            "nav_keys": list(navs.keys())[:5],
+            "holding_names": [h.scheme_name.lower().strip() for h in holdings][:5],
+        }
+    
+@router.get("/nav/search")
+def search_nav(q: str):
+    with get_session() as session:
+        fetcher = NAVFetcher()
+        try:
+            response = httpx.get(AMFI_URL, timeout=30, follow_redirects=True)
+            lines = response.text.splitlines()
+        except Exception as e:
+            return {"error": str(e)}
+        
+        matches = []
+        for line in lines:
+            parts = line.strip().split(";")
+            if len(parts) < 6:
+                continue
+            if q.lower() in parts[3].lower():
+                matches.append({"code": parts[0], "name": parts[3], "nav": parts[4]})
+        return matches[:20]
