@@ -183,6 +183,29 @@ class BaseStatementParser(ABC):
         if "Int.Pd" in desc or "Interest" in desc.title():
             return "Interest Credit"
 
+        # Axis Bank IMPS P2A (person to account transfers)
+        axis_imps_match = re.match(
+            r"IMPS/P2A/\d+/([^/]+)/([^/]+)/([^/]*)",
+            desc,
+            re.IGNORECASE,
+        )
+        if axis_imps_match:
+            name = axis_imps_match.group(1).strip().title()
+            bank = axis_imps_match.group(3).strip().title()
+            if bank:
+                return f"Transfer / {name} / {bank}"
+            return f"Transfer / {name}"
+
+        # Axis Bank salary: EMPLOYER/MNDLLPSALDEC25
+        axis_salary_match = re.match(r"([^/]+)/\w{4,}SAL\w+", desc, re.IGNORECASE)
+        if axis_salary_match:
+            employer = axis_salary_match.group(1).strip().title()
+            return f"Salary / {employer}"
+
+        # Axis Bank interest: SB:ACCOUNT:Int.Pd:period
+        if re.match(r"SB:\d+:Int\.Pd:", desc, re.IGNORECASE):
+            return "Interest Credit"
+
         return desc
 
     def _sanitise(self, result: ParseResult) -> ParseResult:

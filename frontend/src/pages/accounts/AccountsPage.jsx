@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { getAccounts, createAccount, updateAccount, deleteAccount } from '../../api/accounts'
+import { getAccounts, createAccount, updateAccount, deleteAccount, getInstitutions } from '../../api/accounts'
 
-const ACCOUNT_TYPES = ['savings', 'current', 'credit_card', 'investment', 'loan']
+
+
+const ACCOUNT_TYPES = ['savings', 'current', 'credit_card', 'demat', 'mf_folio', 'wallet']
 
 const emptyForm = {
   name: '',
@@ -19,9 +21,15 @@ export default function AccountsPage() {
   const [editingAccount, setEditingAccount] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [error, setError] = useState(null)
+  const [institutions, setInstitutions] = useState([])
+
 
   useEffect(() => {
     fetchAccounts()
+    getInstitutions().then((r) => {
+        console.log('institutions:', r.data)
+        setInstitutions(r.data)
+    })
   }, [])
 
   async function fetchAccounts() {
@@ -168,13 +176,18 @@ export default function AccountsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Institution</label>
-                <input
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                  value={form.institution}
-                  onChange={(e) => setForm({ ...form, institution: e.target.value })}
-                  required
-                />
-              </div>
+                <select
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    value={form.institution}
+                    onChange={(e) => setForm({ ...form, institution: e.target.value })}
+                    required
+                >
+                    <option value="">-- Select institution --</option>
+                    {institutions.map((inst) => (
+                    <option key={inst} value={inst}>{inst}</option>
+                    ))}
+                </select>
+                </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Account Type</label>
                 <select

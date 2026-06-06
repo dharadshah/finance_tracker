@@ -40,7 +40,36 @@ class MFHolding(Base):
     def __repr__(self) -> str:
         return f"<MFHolding scheme={self.scheme_code} units={self.units} folio={self.folio_number}>"
 
+class MFTransaction(Base):
+    """
+    Individual buy/sell transactions from Kuvera CSV export.
+    Used for XIRR calculation and transaction history.
+    """
 
+    __tablename__ = "mf_transactions"
+
+    __table_args__ = (
+        UniqueConstraint("folio_number", "txn_date", "order_type", "units", name="uq_mf_txn"),
+        Index("ix_mf_txn_folio", "folio_number"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    folio_number: Mapped[str] = mapped_column(String(50), nullable=False)
+    scheme_name: Mapped[str] = mapped_column(String(300), nullable=False)
+    txn_date: Mapped[date] = mapped_column(Date, nullable=False)
+    order_type: Mapped[str] = mapped_column(String(10), nullable=False)  # buy / sell
+    units: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
+    nav: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    current_nav: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    source_file: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    def __repr__(self) -> str:
+        return (
+            f"<MFTransaction folio={self.folio_number} "
+            f"{self.order_type} {self.units} units @ {self.nav}>"
+        )
+    
 class MFNavHistory(Base):
     """
     Daily NAV values fetched from MFAPI (api.mfapi.in).

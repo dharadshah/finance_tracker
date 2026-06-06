@@ -23,17 +23,10 @@ class TransactionRepository:
         self,
         parsed: list[ParsedTransaction],
         account_id: int,
-    ) -> tuple[int, int]:
-        """
-        Inserts parsed transactions, skipping exact duplicates.
-        Returns (inserted_count, skipped_count).
-
-        Duplicate detection: same account_id + txn_date + amount + dr_cr + description.
-        This is intentionally conservative — a genuine duplicate payment on the
-        same day for the same amount will be flagged as a warning, not silently dropped.
-        """
+    ) -> tuple[int, int, list[Transaction]]:
         inserted = 0
         skipped = 0
+        inserted_txns = []
 
         for p in parsed:
             if self._is_duplicate(account_id, p):
@@ -46,18 +39,19 @@ class TransactionRepository:
                 amount=p.amount,
                 dr_cr=p.dr_cr,
                 description=p.description,
-                raw_description=p.raw_description,  # add this line
+                raw_description=p.raw_description,
                 reference_number=p.reference_number,
                 notes=p.mode,
                 source_file=p.source_file,
                 category="Uncategorised",
             )
             self._session.add(txn)
+            inserted_txns.append(txn)
             inserted += 1
 
         self._session.flush()
         logger.info("Transactions: %d inserted, %d skipped as duplicates", inserted, skipped)
-        return inserted, skipped
+        return inserted, skipped, inserted_txns
 
     def _is_duplicate(self, account_id: int, p: ParsedTransaction) -> bool:
         # If we have a reference number, use it as the primary dedup key

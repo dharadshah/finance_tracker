@@ -1,14 +1,19 @@
 from finance_tracker.parsers.base import BaseStatementParser
 from finance_tracker.parsers.icici_bank import ICICIBankParser
+from finance_tracker.parsers.axis_bank import AxisBankParser
+from finance_tracker.parsers.kuvera import KuveraParser
+
+
 
 # Registry maps a short key to the parser class.
 # To add a new bank: import its parser and add one line here.
 PARSER_REGISTRY: dict[str, type[BaseStatementParser]] = {
     "icici_bank": ICICIBankParser,
     # "yes_bank":   YesBankParser,     # Phase 2 additions
-    # "axis_bank":  AxisBankParser,
+    "axis_bank":  AxisBankParser,
     # "hdfc_bank":  HDFCBankParser,
     # "sbi":        SBIParser,
+    "kuvera": KuveraParser,
 }
 
 

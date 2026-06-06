@@ -5,6 +5,8 @@ from datetime import date
 from finance_tracker.database import get_session
 from finance_tracker.repositories.account_repository import AccountRepository
 from finance_tracker.models.account import Account
+from finance_tracker.parsers.registry import PARSER_REGISTRY
+
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
@@ -46,6 +48,13 @@ class AccountResponse(BaseModel):
 
 
 # Routes
+@router.get("/institutions", response_model=list[str])
+def list_institutions():
+    parser_institutions = {cls.INSTITUTION for cls in PARSER_REGISTRY.values()}
+    # Add non-parser institutions
+    extra = {"Kuvera"}
+    return sorted(parser_institutions | extra)
+
 @router.get("/", response_model=list[AccountResponse])
 def list_accounts(include_inactive: bool = False):
     with get_session() as session:
@@ -73,10 +82,8 @@ def create_account(payload: AccountCreate):
             account_type=payload.account_type,
             institution=payload.institution,
             masked_number=payload.account_number_last4,
-            currency=payload.currency,
-            opened_on=payload.opened_on,
-            notes=payload.notes,
             is_active=True,
+            notes=payload.notes,
         )
         return AccountResponse.model_validate(account)
 
@@ -104,3 +111,4 @@ def delete_account(account_id: int):
             raise HTTPException(status_code=404, detail="Account not found")
         session.delete(account)
         session.flush()
+

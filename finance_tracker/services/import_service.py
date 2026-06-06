@@ -78,19 +78,17 @@ class ImportService:
                 acct_repo, result, parser.INSTITUTION, account_id
             )
 
-            inserted, skipped = txn_repo.save_parsed_transactions(
+            inserted, skipped, new_txns = txn_repo.save_parsed_transactions(
                 result.transactions, account.id
             )
 
             # Run categorisation on newly inserted transactions only
-            if inserted > 0:
-                new_txns = txn_repo.get_uncategorised(account.id)
-                if new_txns:
-                    pipeline = CategorizationPipeline(
-                        session=session,
-                        institution=parser.INSTITUTION,
-                    )
-                    cat_summary = pipeline.run(new_txns)
+            if inserted > 0 and new_txns:
+                pipeline = CategorizationPipeline(
+                    session=session,
+                    institution=parser.INSTITUTION,
+                )
+                cat_summary = pipeline.run(new_txns)
 
         period = ""
         if result.statement_period_start and result.statement_period_end:
