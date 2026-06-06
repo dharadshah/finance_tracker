@@ -9,6 +9,8 @@ from pathlib import Path
 from finance_tracker.database import get_session
 from finance_tracker.models.investment import MFTransaction, MFHolding
 from finance_tracker.services.mf_import_service import MFImportService
+from finance_tracker.services.nav_fetcher import NAVFetcher
+
 
 router = APIRouter(prefix="/api/mf", tags=["mutual_funds"])
 
@@ -86,10 +88,23 @@ def list_holdings():
             select(MFHolding).order_by(MFHolding.scheme_name)
         ).scalars().all()
 
+        # Get latest NAVs
+        fetcher = NAVFetcher()
+        latest_navs = fetcher.get_latest_navs(session)
+
         result = []
         for h in holdings:
-            current_value = float(h.units) * float(h.avg_nav)
             invested = float(h.invested_amount or 0)
+
+            # Use latest NAV if available, else fall back to avg_nav
+            nav_match = latest_navs.get(h.scheme_name.lower().strip())
+            if nav_match:
+                current_nav = float(nav_match[0])
+                current_value = float(h.units) * current_nav
+            else:
+                current_nav = float(h.avg_nav)
+                current_value = float(h.units) * current_nav
+
             pnl = current_value - invested
             pnl_pct = (pnl / invested * 100) if invested > 0 else 0
 
@@ -121,3 +136,26 @@ def list_mf_transactions(
             stmt = stmt.where(MFTransaction.folio_number == folio)
         txns = session.execute(stmt).scalars().all()
         return [MFTransactionResponse.model_validate(t) for t in txns]
+    
+
+class NAVFetchSummary(BaseModel):
+    fetched: int
+    matched: int
+    already_current: int
+    errors: list[str]
+
+
+@router.post("/nav/refresh", response_model=NAVFetchSummary)
+def refresh_nav():
+    with get_session() as session:
+        fetcher = NAVFetcher()
+        summary = fetcher.fetch_and_store(session)
+        return NAVFetchSummary(**summary)
+
+
+@router.get("/nav/latest", response_model=dict)
+def get_latest_nav():
+    with get_session() as session:
+        fetcher = NAVFetcher()
+        navs = fetcher.get_latest_navs(session)
+        return {k: {"nav": float(v[0]), "date": str(v[1])} for k, v in navs.items()}

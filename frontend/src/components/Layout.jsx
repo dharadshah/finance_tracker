@@ -10,7 +10,7 @@ const navGroups = [
     label: 'Bank',
     items: [
       { path: '/transactions', label: 'Bank Transactions' },
-      { path: '/', label: 'Bank Accounts' },
+      { path: '/import', label: 'Import' },
       { path: '/categories', label: 'Categories' },
     ],
   },
@@ -21,8 +21,8 @@ const navGroups = [
   {
     label: 'Utilities',
     items: [
+      { path: '/', label: 'Accounts' },
       
-      { path: '/import', label: 'Import' },
       { path: '/rules', label: 'Rules' },
     ],
   },

@@ -11,10 +11,26 @@ export default function MutualFundsPage() {
   const [transactions, setTransactions] = useState([])
   const [txnLoading, setTxnLoading] = useState(false)
   const [search, setSearch] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
+  const [navSummary, setNavSummary] = useState(null)
 
   useEffect(() => {
     fetchHoldings()
   }, [])
+  
+  async function handleRefreshNAV() {
+    setRefreshing(true)
+    setError(null)
+    try {
+      const res = await axios.post('/api/mf/nav/refresh')
+      setNavSummary(res.data)
+      fetchHoldings()
+    } catch {
+      setError('Failed to refresh NAV')
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   async function fetchHoldings() {
     setLoading(true)
@@ -78,8 +94,14 @@ export default function MutualFundsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Mutual Funds</h1>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleRefreshNAV}
+          disabled={refreshing}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm font-medium disabled:opacity-50"
+        >
+          {refreshing ? 'Refreshing...' : 'Refresh NAV'}
+        </button>
         <label className={`cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium ${importing ? 'opacity-50' : ''}`}>
           {importing ? 'Importing...' : 'Import Kuvera CSV'}
           <input type="file" accept=".csv" onChange={handleImport} className="hidden" disabled={importing} />
@@ -98,6 +120,25 @@ export default function MutualFundsPage() {
             <div><div className="text-gray-500">Funds</div><div className="font-bold">{summary.funds_count}</div></div>
             <div><div className="text-gray-500">Period</div><div className="font-bold text-xs">{summary.period_start} – {summary.period_end}</div></div>
           </div>
+        </div>
+      )}
+
+      {navSummary && (
+        <div className="mb-6 bg-white rounded-xl border border-green-200 p-4">
+          <h3 className="font-medium mb-3">✅ NAV Refreshed</h3>
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div><div className="text-gray-500">Matched</div><div className="font-bold">{navSummary.matched}</div></div>
+            <div><div className="text-gray-500">Already Current</div><div className="font-bold">{navSummary.already_current}</div></div>
+            <div><div className="text-gray-500">Unmatched</div><div className="font-bold text-red-500">{navSummary.errors.length}</div></div>
+          </div>
+          {navSummary.errors.length > 0 && (
+            <details className="mt-3">
+              <summary className="text-xs text-gray-500 cursor-pointer">Show unmatched funds</summary>
+              <div className="mt-2 space-y-1">
+                {navSummary.errors.map((e, i) => <div key={i} className="text-xs text-red-500">{e}</div>)}
+              </div>
+            </details>
+          )}
         </div>
       )}
 
