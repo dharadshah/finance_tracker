@@ -2,6 +2,8 @@ from finance_tracker.parsers.base import BaseStatementParser
 from finance_tracker.parsers.icici_bank import ICICIBankParser
 from finance_tracker.parsers.axis_bank import AxisBankParser
 from finance_tracker.parsers.kuvera import KuveraParser
+from finance_tracker.parsers.icici_credit_card import ICICICreditCardParser
+from finance_tracker.parsers.axis_credit_card import AxisCreditCardParser
 
 
 
@@ -14,6 +16,8 @@ PARSER_REGISTRY: dict[str, type[BaseStatementParser]] = {
     # "hdfc_bank":  HDFCBankParser,
     # "sbi":        SBIParser,
     "kuvera": KuveraParser,
+    "icici_credit_card": ICICICreditCardParser,
+    "axis_credit_card": AxisCreditCardParser,
 }
 
 

@@ -71,6 +71,7 @@ DEFAULT_CATEGORIES = [
 
     # Finance
     ("Credit Card Payment", "Finance", "transfer"),
+    ("Reward Points", "Income", "income"),
     ("Loan EMI", "Finance", "expense"),
     ("Insurance Premium", "Finance", "expense"),
     ("Bank Charges", "Finance", "expense"),
