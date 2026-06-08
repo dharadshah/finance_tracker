@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useOwner } from '../../context/OwnerContext'
 import axios from 'axios'
+import { getAccounts } from '../../api/accounts'
 
 export default function MutualFundsPage() {
   const [holdings, setHoldings] = useState([])
@@ -13,10 +15,19 @@ export default function MutualFundsPage() {
   const [search, setSearch] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [navSummary, setNavSummary] = useState(null)
+  const [accounts, setAccounts] = useState([])
+  const [selectedAccountId, setSelectedAccountId] = useState('')
+  const { owner } = useOwner()
+
 
   useEffect(() => {
     fetchHoldings()
-  }, [])
+    getAccounts().then((r) => {
+      const mfAccounts = r.data.filter(a => a.account_type === 'mf_folio' && a.owner === owner)
+      setAccounts(mfAccounts)
+      if (mfAccounts.length > 0) setSelectedAccountId(mfAccounts[0].id)
+    })
+  }, [owner])
   
   async function handleRefreshNAV() {
     setRefreshing(true)
@@ -35,7 +46,7 @@ export default function MutualFundsPage() {
   async function fetchHoldings() {
     setLoading(true)
     try {
-      const res = await axios.get('/api/mf/holdings')
+      const res = await axios.get('/api/mf/holdings', { params: { owner } })
       setHoldings(res.data)
     } catch {
       setError('Failed to load holdings')
@@ -59,12 +70,17 @@ export default function MutualFundsPage() {
   async function handleImport(e) {
     const file = e.target.files[0]
     if (!file) return
+    if (!selectedAccountId) {
+      setError('Please select a portfolio account first')
+      return
+    }
     setImporting(true)
     setError(null)
     setSummary(null)
     try {
       const formData = new FormData()
       formData.append('file', file)
+      formData.append('account_id', selectedAccountId)
       const res = await axios.post('/api/mf/import', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
@@ -95,6 +111,16 @@ export default function MutualFundsPage() {
   return (
     <div>
       <div className="flex items-center gap-3">
+        <select
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          value={selectedAccountId}
+          onChange={(e) => setSelectedAccountId(e.target.value)}
+        >
+          <option value="">-- Select portfolio --</option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>{a.name}</option>
+          ))}
+        </select>
         <button
           onClick={handleRefreshNAV}
           disabled={refreshing}
@@ -221,6 +247,7 @@ export default function MutualFundsPage() {
                   <th className="text-right px-4 py-3 text-gray-600 font-medium">Invested</th>
                   <th className="text-right px-4 py-3 text-gray-600 font-medium">Current Value</th>
                   <th className="text-right px-4 py-3 text-gray-600 font-medium">P&L</th>
+                  <th className="text-right px-4 py-3 text-gray-600 font-medium">XIRR</th>
                   <th className="text-right px-4 py-3 text-gray-600 font-medium">Return</th>
                 </tr>
               </thead>
@@ -241,6 +268,9 @@ export default function MutualFundsPage() {
                     </td>
                     <td className={`px-4 py-3 text-right font-medium ${h.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {h.pnl >= 0 ? '+' : ''}₹{h.pnl.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </td>
+                    <td className={`px-4 py-3 text-right font-medium ${(h.xirr || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {h.xirr != null ? `${h.xirr >= 0 ? '+' : ''}${h.xirr.toFixed(2)}%` : '—'}
                     </td>
                     <td className={`px-4 py-3 text-right font-medium ${h.pnl_pct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {h.pnl_pct >= 0 ? '+' : ''}{h.pnl_pct.toFixed(2)}%

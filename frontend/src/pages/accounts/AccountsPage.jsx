@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getAccounts, createAccount, updateAccount, deleteAccount, getInstitutions } from '../../api/accounts'
-
-
+import { getAccounts, createAccount, updateAccount, deleteAccount, getInstitutions, getOwners } from '../../api/accounts'
 
 const ACCOUNT_TYPES = ['savings', 'current', 'credit_card', 'demat', 'mf_folio', 'wallet']
 
@@ -12,6 +10,7 @@ const emptyForm = {
   account_number_last4: '',
   currency: 'INR',
   notes: '',
+  owner: 'Dhara',
 }
 
 export default function AccountsPage() {
@@ -22,12 +21,13 @@ export default function AccountsPage() {
   const [form, setForm] = useState(emptyForm)
   const [error, setError] = useState(null)
   const [institutions, setInstitutions] = useState([])
+  const [owners, setOwners] = useState([])
 
 
   useEffect(() => {
     fetchAccounts()
+    getOwners().then((r) => setOwners(r.data))
     getInstitutions().then((r) => {
-        console.log('institutions:', r.data)
         setInstitutions(r.data)
     })
   }, [])
@@ -113,6 +113,7 @@ export default function AccountsPage() {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="text-left px-4 py-3 text-gray-600 font-medium">Name</th>
+                <th className="text-left px-4 py-3 text-gray-600 font-medium">Owner</th>
                 <th className="text-left px-4 py-3 text-gray-600 font-medium">Institution</th>
                 <th className="text-left px-4 py-3 text-gray-600 font-medium">Type</th>
                 <th className="text-left px-4 py-3 text-gray-600 font-medium">Currency</th>
@@ -124,6 +125,7 @@ export default function AccountsPage() {
               {accounts.map((a) => (
                 <tr key={a.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-gray-900">{a.name}</td>
+                  <td className="px-4 py-3 text-gray-600">{a.owner}</td>
                   <td className="px-4 py-3 text-gray-600">{a.institution}</td>
                   <td className="px-4 py-3 text-gray-600 capitalize">{a.account_type}</td>
                   <td className="px-4 py-3 text-gray-600">{a.currency}</td>
@@ -210,6 +212,18 @@ export default function AccountsPage() {
                   placeholder="Optional"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Owner</label>
+                <select
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    value={form.owner}
+                    onChange={(e) => setForm({ ...form, owner: e.target.value })}
+                >
+                    {owners.map((o) => (
+                    <option key={o} value={o}>{o}</option>
+                    ))}
+                </select>
+                </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                 <input

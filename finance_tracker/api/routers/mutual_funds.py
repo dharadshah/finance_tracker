@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, UploadFile, File, Form
 from pydantic import BaseModel
 from datetime import date
 from decimal import Decimal
@@ -13,6 +13,8 @@ from finance_tracker.database import get_session
 from finance_tracker.models.investment import MFTransaction, MFHolding
 from finance_tracker.services.mf_import_service import MFImportService
 from finance_tracker.services.nav_fetcher import NAVFetcher
+from finance_tracker.services.xirr import xirr as calculate_xirr
+
 
 
 router = APIRouter(prefix="/api/mf", tags=["mutual_funds"])
@@ -60,14 +62,17 @@ class MFImportSummaryResponse(BaseModel):
 
 
 @router.post("/import", response_model=MFImportSummaryResponse)
-async def import_kuvera(file: UploadFile = File(...)):
+async def import_kuvera(
+    file: UploadFile = File(...),
+    account_id: int = Form(...),
+):
     suffix = Path(file.filename).suffix
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp.write(await file.read())
         tmp_path = tmp.name
     try:
         service = MFImportService()
-        summary = service.import_csv(tmp_path)
+        summary = service.import_csv(tmp_path, account_id=account_id)
     finally:
         os.unlink(tmp_path)
 
@@ -85,21 +90,45 @@ async def import_kuvera(file: UploadFile = File(...)):
 
 
 @router.get("/holdings", response_model=list[MFHoldingResponse])
-def list_holdings():
+@router.get("/holdings", response_model=list[MFHoldingResponse])
+def list_holdings(owner: str | None = None):
     with get_session() as session:
+        stmt = select(MFHolding)
+        if owner:
+            from finance_tracker.models.account import Account
+            account_ids = [
+                a.id for a in session.execute(
+                    select(Account).where(Account.owner == owner)
+                ).scalars().all()
+            ]
+            stmt = stmt.where(MFHolding.account_id.in_(account_ids))
+
         holdings = session.execute(
-            select(MFHolding).order_by(MFHolding.scheme_name)
+            stmt.order_by(MFHolding.scheme_name)
         ).scalars().all()
 
         # Get latest NAVs
         fetcher = NAVFetcher()
         latest_navs = fetcher.get_latest_navs(session)
 
+        # Load all MF transactions for XIRR
+        all_txns = session.execute(
+            select(MFTransaction).order_by(MFTransaction.txn_date)
+        ).scalars().all()
+
+        # Group transactions by folio + scheme
+        from collections import defaultdict
+        txn_map = defaultdict(list)
+        for t in all_txns:
+            txn_map[(t.folio_number, t.scheme_name)].append(t)
+
         result = []
+        today = date.today()
+
         for h in holdings:
             invested = float(h.invested_amount or 0)
 
-            # Use latest NAV if available, else fall back to avg_nav
+            # Current value from latest NAV
             nav_match = latest_navs.get(h.scheme_name.lower().strip())
             if nav_match:
                 current_nav = float(nav_match[0])
@@ -111,6 +140,20 @@ def list_holdings():
             pnl = current_value - invested
             pnl_pct = (pnl / invested * 100) if invested > 0 else 0
 
+            # Calculate XIRR
+            txns = txn_map.get((h.folio_number, h.scheme_name), [])
+            cashflows = []
+            for t in txns:
+                if t.order_type == "buy":
+                    cashflows.append((t.txn_date, -float(t.amount)))
+                elif t.order_type == "sell":
+                    cashflows.append((t.txn_date, float(t.amount)))
+            # Add current value as final cashflow
+            if cashflows and current_value > 0:
+                cashflows.append((today, current_value))
+
+            xirr_value = calculate_xirr(cashflows)
+
             result.append(MFHoldingResponse(
                 id=h.id,
                 scheme_name=h.scheme_name,
@@ -121,6 +164,7 @@ def list_holdings():
                 current_value=current_value,
                 pnl=pnl,
                 pnl_pct=pnl_pct,
+                xirr=xirr_value,
                 last_updated=h.last_updated,
             ))
         return result

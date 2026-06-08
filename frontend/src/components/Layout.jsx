@@ -1,5 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useState } from 'react'
+import { useOwner } from '../context/OwnerContext'
+
 
 const navGroups = [
   {
@@ -29,16 +31,17 @@ const navGroups = [
 ]
 
 export default function Layout({ children }) {
-  const location = useLocation()
-
+  const { owner, setOwner } = useOwner()
+  const owners = ['Dhara', 'Yashvi', 'Jisha']
+  
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
       <aside className="w-56 bg-white border-r border-gray-200 min-h-screen flex flex-col">
         <div className="px-5 py-5 border-b border-gray-100">
           <span className="text-base font-bold text-gray-900">Finance Tracker</span>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-5">
+          {/* existing nav groups */}
           {navGroups.map((group, gi) => (
             <div key={gi}>
               {group.label && (
@@ -69,7 +72,6 @@ export default function Layout({ children }) {
         </nav>
       </aside>
 
-      {/* Main content */}
       <main className="flex-1 px-8 py-8 overflow-auto">
         {children}
       </main>

@@ -90,6 +90,11 @@ class ImportService:
                 )
                 cat_summary = pipeline.run(new_txns)
 
+            # Save closing balance to account
+            if result.closing_balance is not None:
+                account.current_balance = result.closing_balance
+                session.flush()
+                
         period = ""
         if result.statement_period_start and result.statement_period_end:
             period = (

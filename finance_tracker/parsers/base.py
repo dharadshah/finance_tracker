@@ -35,6 +35,7 @@ class ParseResult:
     institution: str | None = None
     statement_period_start: date | None = None
     statement_period_end: date | None = None
+    closing_balance: Decimal | None = None  # add this line
     currency: str = "INR"
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)

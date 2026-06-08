@@ -55,6 +55,7 @@ def list_transactions(
     dr_cr: str | None = Query(None),
     search: str | None = Query(None),
     category: str | None = Query(None),
+    owner: str | None = Query(None),
 ):
     with get_session() as session:
         stmt = select(Transaction, Account).join(
@@ -72,6 +73,8 @@ def list_transactions(
             stmt = stmt.where(Transaction.description.ilike(f"%{search}%"))
         if category:
             stmt = stmt.where(Transaction.category == category)
+        if owner:
+            stmt = stmt.where(Account.owner == owner)  # add this
         stmt = stmt.order_by(Transaction.txn_date.desc())
         rows = session.execute(stmt).all()
 

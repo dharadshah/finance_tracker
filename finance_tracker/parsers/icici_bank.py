@@ -93,28 +93,25 @@ class ICICIBankParser(BaseStatementParser):
                 return i
         return None
 
-    def _parse_transactions(
-        self, lines: list[str], result: ParseResult, filename: str
-    ) -> None:
+    def _parse_transactions(self, lines, result, filename):
+        last_balance = None
         for line in lines:
             line = line.strip()
-
-            # Stop at blank line or next section header
             if not line:
                 break
             if line.startswith("Statement of Linked") or line.startswith("FIXED DEPOSIT"):
                 break
-
-            # Skip the carry-forward row
             if ",B/F," in line:
                 continue
-
             try:
                 txn = self._parse_row(line, filename)
                 if txn is not None:
                     result.transactions.append(txn)
+                    if txn.balance is not None:
+                        last_balance = txn.balance
             except Exception as e:
                 result.warnings.append(f"Skipped row: {line[:80]!r} — {e}")
+        result.closing_balance = last_balance
 
     def _parse_row(self, line: str, filename: str) -> ParsedTransaction | None:
         # Use csv.reader to handle commas inside quoted fields correctly

@@ -2,7 +2,8 @@ from sqlalchemy import String, Date, Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import date
 from enum import Enum
-
+from decimal import Decimal
+from sqlalchemy import String, Date, Enum as SAEnum, Numeric
 from finance_tracker.database import Base
 
 
@@ -29,12 +30,14 @@ class Account(Base):
         SAEnum(AccountType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
+    current_balance: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     institution: Mapped[str] = mapped_column(String(100), nullable=False)
     account_number_last4: Mapped[str | None] = mapped_column(String(4), nullable=True)
     currency: Mapped[str] = mapped_column(String(3), default="INR", nullable=False)
     opened_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
     notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    owner: Mapped[str] = mapped_column(String(50), default="Dhara", nullable=False)
 
     # Relationships
     transactions: Mapped[list["Transaction"]] = relationship(  # noqa: F821

@@ -1,7 +1,8 @@
 import sqlite3, glob
 db = glob.glob('**/*.db', recursive=True)[0]
 conn = sqlite3.connect(db)
-conn.execute("DELETE FROM mf_nav_history")
+conn.execute("ALTER TABLE accounts ADD COLUMN owner VARCHAR(50) DEFAULT 'Dhara'")
+conn.execute("UPDATE accounts SET owner = 'Dhara'")
 conn.commit()
-print('Cleared')
+print('Done')
 conn.close()

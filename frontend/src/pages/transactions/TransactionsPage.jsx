@@ -3,6 +3,8 @@ import { getTransactions, bulkDelete, bulkCorrectCategory, correctCategory, dele
 import { getAccounts } from '../../api/accounts'
 import { getCategories } from '../../api/categories'
 import PieCharts from './PieCharts'
+import { useOwner } from '../../context/OwnerContext'
+
 
 
 const today = new Date().toISOString().split('T')[0]
@@ -15,6 +17,9 @@ export default function TransactionsPage() {
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const { owner, setOwner } = useOwner()
+  const owners = ['Dhara', 'Yashvi', 'Jisha']
+
 
   // Filters
   const [accountId, setAccountId] = useState('')
@@ -36,13 +41,17 @@ export default function TransactionsPage() {
   const [showDeleteAll, setShowDeleteAll] = useState(false)
 
   useEffect(() => {
-    getAccounts().then((r) => setAccounts(r.data))
+    setAccountId('')  // reset account selection when owner changes
+    getAccounts().then((r) => {
+      const filtered = r.data.filter(a => a.owner === owner)
+      setAccounts(filtered)
+    })
     getCategories().then((r) => {
       setCategories(r.data)
       if (r.data.length > 0) setNewCategory(r.data[0].name)
     })
     fetchTransactions()
-  }, [])
+  }, [owner])
 
   async function fetchTransactions() {
     setLoading(true)
@@ -55,6 +64,7 @@ export default function TransactionsPage() {
       if (toDate) params.to_date = toDate
       if (drCr) params.dr_cr = drCr
       if (search) params.search = search
+      params.owner = owner  // add this
       const res = await getTransactions(params)
       setTransactions(res.data)
     } catch (e) {
@@ -136,8 +146,20 @@ export default function TransactionsPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Transactions</h1>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6"> 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Owner</label>
+            <select
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              value={owner}
+              onChange={(e) => setOwner(e.target.value)}
+            >
+              {owners.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Account</label>
             <select

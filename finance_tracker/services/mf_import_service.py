@@ -40,7 +40,7 @@ class MFImportService:
     Also updates mf_holdings (units, avg_nav, invested_amount) per fund.
     """
 
-    def import_csv(self, file_path: str | Path) -> MFImportSummary:
+    def import_csv(self, file_path: str | Path, account_id: int) -> MFImportSummary:
         path = Path(file_path)
         summary = MFImportSummary()
 
@@ -71,7 +71,7 @@ class MFImportService:
                     summary.warnings.append(f"Skipped row: {e}")
 
             # Rebuild holdings from all transactions
-            summary.holdings_updated = self._rebuild_holdings(session)
+            summary.holdings_updated = self._rebuild_holdings(session, account_id)
 
         # Set period
         if rows:
@@ -179,8 +179,8 @@ class MFImportService:
 
         # Delete all existing holdings and recreate
         from sqlalchemy import delete
-        session.execute(delete(MFHolding))
-
+        session.execute(delete(MFHolding).where(MFHolding.account_id == account_id))
+        
         from datetime import date as date_type
         today = date_type.today()
 

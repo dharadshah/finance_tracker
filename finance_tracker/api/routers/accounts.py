@@ -20,6 +20,7 @@ class AccountCreate(BaseModel):
     currency: str = "INR"
     opened_on: date | None = None
     notes: str | None = None
+    owner: str = "Dhara"
 
 
 class AccountUpdate(BaseModel):
@@ -31,7 +32,7 @@ class AccountUpdate(BaseModel):
     opened_on: date | None = None
     is_active: bool | None = None
     notes: str | None = None
-
+    owner: str | None = None
 
 class AccountResponse(BaseModel):
     id: int
@@ -43,6 +44,8 @@ class AccountResponse(BaseModel):
     opened_on: date | None
     is_active: bool
     notes: str | None
+    current_balance: float | None  # add this
+    owner: str
 
     model_config = {"from_attributes": True}
 
@@ -54,6 +57,10 @@ def list_institutions():
     # Add non-parser institutions
     extra = {"Kuvera"}
     return sorted(parser_institutions | extra)
+
+@router.get("/owners", response_model=list[str])
+def list_owners():
+    return ["Dhara", "Yashvi", "Jisha"]
 
 @router.get("/", response_model=list[AccountResponse])
 def list_accounts(include_inactive: bool = False):
@@ -85,6 +92,8 @@ def create_account(payload: AccountCreate):
             is_active=True,
             notes=payload.notes,
         )
+        account.owner = payload.owner
+        session.flush()
         return AccountResponse.model_validate(account)
 
 
@@ -112,3 +121,7 @@ def delete_account(account_id: int):
         session.delete(account)
         session.flush()
 
+# Add owners endpoint
+@router.get("/owners", response_model=list[str])
+def list_owners():
+    return ["Dhara", "Yashvi", "Jisha"]
