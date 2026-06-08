@@ -35,6 +35,11 @@ class NAVFetcher:
         "hdfc flexicap growth direct plan": "hdfc flexi cap fund - growth option - direct plan",
         "tata digital india growth direct plan": "tata digital india fund-direct plan-growth",
         "sbi banking & financial services growth direct plan": "sbi banking & financial services fund - direct plan - growth",
+        "bandhan small cap growth direct plan": "bandhan small cap fund - direct plan growth",
+        "parag parikh flexi cap growth direct plan": "parag parikh flexi cap fund - direct plan - growth",
+        "canara robeco infrastructure growth direct plan": "canara robeco infrastructure fund - direct plan - growth option",
+        "edelweiss mid cap growth direct plan": "edelweiss mid cap fund - direct plan - growth option",
+        "mirae asset elss tax saver growth direct plan": "mirae asset elss tax saver fund - direct plan - growth",
     }
 
 

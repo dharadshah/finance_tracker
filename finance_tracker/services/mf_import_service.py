@@ -137,7 +137,7 @@ class MFImportService:
         session.flush()
         return True
 
-    def _rebuild_holdings(self, session) -> int:
+    def _rebuild_holdings(self, session, account_id: int) -> int:
         """
         Rebuilds mf_holdings from scratch based on all mf_transactions.
         Units = sum of buys - sum of sells per folio+scheme.
