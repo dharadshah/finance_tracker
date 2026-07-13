@@ -22,6 +22,21 @@ class ParsedTransaction:
     balance: Decimal | None = None
     source_file: str | None = None
 
+@dataclass
+class ParsedMFTransaction:
+    """
+    Normalised mutual fund transaction record produced by the NJ India parser.
+    Separate from ParsedTransaction — MF transactions have units, folio,
+    and direction (inflow/outflow) instead of DR/CR and bank description fields.
+    """
+    txn_date:       date
+    scheme_name:    str
+    folio_number:   str
+    txn_type:       str        # Redemption / Purchase / SIP / Switch In etc.
+    direction:      str        # 'inflow' or 'outflow'
+    units:          Decimal
+    amount:         Decimal
+    source_file:    str | None = None
 
 @dataclass
 class ParseResult:
@@ -30,6 +45,7 @@ class ParseResult:
     Contains transactions plus metadata extracted from the file.
     """
     transactions: list[ParsedTransaction] = field(default_factory=list)
+    mf_transactions: list[ParsedMFTransaction] = field(default_factory=list)
     account_number_masked: str | None = None   # e.g. XXXXXXXX6760
     account_holder_name: str | None = None
     institution: str | None = None
@@ -123,7 +139,7 @@ class BaseStatementParser(ABC):
         upl_match = re.match(r"UPL/\d+/(\w+)/.*", desc, re.IGNORECASE)
         if upl_match:
             mode = upl_match.group(1).upper()
-            if mode == "UPI":
+            if mode in ("UPI", "REMAR"):  # add REMAR
                 return "UPI Wallet"
             return f"UPI Collect / {upl_match.group(1)}"
 

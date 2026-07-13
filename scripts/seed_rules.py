@@ -19,6 +19,7 @@ from finance_tracker.models.transaction import Category
 # (institution, description_pattern, category_name)
 DEFAULT_RULES = [
     ("ICICI Bank", "UPI Wallet",                      "UPI Wallet"),
+    ("ICICI Bank", "UPI Collect / remar",             "UPI Wallet"),
     ("ICICI Bank", "Salary / Sonalben D",             "Maid Salary"),
     ("ICICI Bank", "UPI / Bseindia C / Pay Via Ra",   "Mutual Fund Lumpsum"),
     ("ICICI Bank", "Fund Transfer / Jisha Shah",       "Account Transfer"),

@@ -125,16 +125,6 @@ def list_transactions(
         return result
 
 
-@router.patch("/{transaction_id}/category", response_model=dict)
-def correct_category(transaction_id: int, payload: CategoryCorrection):
-    with get_session() as session:
-        txn = session.get(Transaction, transaction_id)
-        if not txn:
-            raise HTTPException(status_code=404, detail="Transaction not found")
-        acct = session.get(Account, txn.account_id)
-        pipeline = CategorizationPipeline(session, acct.institution)
-        pipeline.apply_manual_correction(transaction_id, payload.category_name)
-        return {"message": f"Category updated to '{payload.category_name}'"}
 
 
 @router.post("/bulk-correct", response_model=dict)
@@ -189,6 +179,44 @@ def delete_filtered(
         deleted = repo.delete_by_ids(ids)
         return {"message": f"Deleted {deleted} transaction(s)", "deleted": deleted}
 
+@router.get("/dividends", response_model=list[dict])
+def get_dividends(owner: str | None = Query(None)):
+    with get_session() as session:
+        stmt = select(Transaction, Account).join(
+            Account, Transaction.account_id == Account.id
+        ).where(Transaction.category == "Dividends")
+        if owner:
+            stmt = stmt.where(Account.owner == owner)
+        stmt = stmt.order_by(Transaction.txn_date.desc())
+        rows = session.execute(stmt).all()
+
+        result = []
+        for txn, acct in rows:
+            result.append({
+                "id": txn.id,
+                "txn_date": str(txn.txn_date),
+                "description": txn.description,
+                "amount": float(txn.amount),
+                "account_name": acct.name,
+                "month": txn.txn_date.strftime("%b %Y"),
+                "year": txn.txn_date.year,
+                "month_num": txn.txn_date.month,
+            })
+        return result
+    
+
+
+@router.patch("/{transaction_id}/category", response_model=dict)
+def correct_category(transaction_id: int, payload: CategoryCorrection):
+    with get_session() as session:
+        txn = session.get(Transaction, transaction_id)
+        if not txn:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        acct = session.get(Account, txn.account_id)
+        pipeline = CategorizationPipeline(session, acct.institution)
+        pipeline.apply_manual_correction(transaction_id, payload.category_name)
+        return {"message": f"Category updated to '{payload.category_name}'"}
+    
 @router.delete("/{transaction_id}", status_code=204)
 def delete_transaction(transaction_id: int):
     with get_session() as session:
@@ -197,3 +225,4 @@ def delete_transaction(transaction_id: int):
             raise HTTPException(status_code=404, detail="Transaction not found")
         session.delete(txn)
         session.flush()
+

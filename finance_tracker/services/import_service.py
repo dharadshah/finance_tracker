@@ -8,6 +8,8 @@ from finance_tracker.parsers import get_parser, ParseResult
 from finance_tracker.repositories.account_repository import AccountRepository
 from finance_tracker.repositories.transaction_repository import TransactionRepository
 from finance_tracker.services.categorisation import CategorizationPipeline
+from finance_tracker.models import AccountType
+from finance_tracker.repositories.mf_transaction_repository import MFTransactionRepository
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,24 @@ class ImportSummary:
     def total_processed(self) -> int:
         return self.transactions_inserted + self.transactions_skipped
 
+@dataclass
+class MFImportSummary:
+    """Result returned to the UI after an NJ India MF import run."""
+    account_name:        str
+    institution:         str
+    statement_period:    str
+    transactions_inserted: int
+    transactions_skipped:  int
+    warnings: list[str] = field(default_factory=list)
+    errors:   list[str] = field(default_factory=list)
+
+    @property
+    def success(self) -> bool:
+        return len(self.errors) == 0
+
+    @property
+    def total_processed(self) -> int:
+        return self.transactions_inserted + self.transactions_skipped
 
 class ImportService:
     """
@@ -141,3 +161,90 @@ class ImportService:
             last4 = masked[-4:] if len(masked) >= 4 else masked
             return f"{institution} ...{last4}"
         return institution
+
+    def import_mf_transactions(
+        self,
+        file_path: str | Path,
+        parser_key: str,
+        account_id: int | None = None,
+    ) -> MFImportSummary:
+        """
+        Import pipeline for MF transaction reports (NJ India).
+        Parses the file, resolves or creates the account, saves
+        ParsedMFTransaction records. No categorisation is run.
+        """
+        path = Path(file_path)
+        parser = get_parser(parser_key)
+
+        logger.info("Parsing MF file %s with %s", path.name, parser.__class__.__name__)
+        result: ParseResult = parser.process(path)
+
+        if result.has_errors:
+            return MFImportSummary(
+                account_name="",
+                institution=parser.INSTITUTION,
+                statement_period="",
+                transactions_inserted=0,
+                transactions_skipped=0,
+                warnings=result.warnings,
+                errors=result.errors,
+            )
+
+        with get_session() as session:
+            acct_repo   = AccountRepository(session)
+            mf_txn_repo = MFTransactionRepository(session)
+
+            account = self._resolve_mf_account(
+                acct_repo, parser.INSTITUTION, account_id
+            )
+
+            inserted, skipped = mf_txn_repo.save_parsed_mf_transactions(
+                result.mf_transactions, account.id
+            )
+
+        period = ""
+        if result.statement_period_start and result.statement_period_end:
+            period = (
+                f"{result.statement_period_start.strftime('%d %b %Y')} - "
+                f"{result.statement_period_end.strftime('%d %b %Y')}"
+            )
+
+        return MFImportSummary(
+            account_name=parser.INSTITUTION,
+            institution=parser.INSTITUTION,
+            statement_period=period,
+            transactions_inserted=inserted,
+            transactions_skipped=skipped,
+            warnings=result.warnings,
+            errors=result.errors,
+        )
+
+    def _resolve_mf_account(
+        self,
+        repo: AccountRepository,
+        institution: str,
+        account_id: int | None,
+    ) -> object:
+        """
+        Resolves the MF account for NJ India.
+        If account_id is supplied, uses that.
+        Otherwise finds or creates an account by institution name.
+        """
+        if account_id is not None:
+            acct = repo.get_by_id(account_id)
+            if acct is None:
+                raise ValueError(f"Account ID {account_id} not found.")
+            return acct
+
+        existing = repo.get_by_institution_and_type(
+            institution, AccountType.MF_FOLIO
+        )
+        if existing:
+            return existing[0]
+
+        return repo.create(
+            name=institution,
+            account_type=AccountType.MF_FOLIO,
+            institution=institution,
+            is_active=True,
+        )

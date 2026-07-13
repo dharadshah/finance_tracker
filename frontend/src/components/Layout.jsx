@@ -14,11 +14,16 @@ const navGroups = [
       { path: '/transactions', label: 'Bank Transactions' },
       { path: '/import', label: 'Import' },
       { path: '/categories', label: 'Categories' },
+      { path: '/dividends', label: 'Dividends' },
     ],
   },
   {
     label: null,
     items: [{ path: '/mutual-funds', label: 'Mutual Funds' }],
+  },
+  {
+    label: null,
+    items: [{ path: '/stocks', label: 'Stocks' }],
   },
   {
     label: 'Utilities',

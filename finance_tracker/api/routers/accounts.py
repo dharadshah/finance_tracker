@@ -55,7 +55,7 @@ class AccountResponse(BaseModel):
 def list_institutions():
     parser_institutions = {cls.INSTITUTION for cls in PARSER_REGISTRY.values()}
     # Add non-parser institutions
-    extra = {"Kuvera"}
+    extra = {"Kuvera", "Zerodha"}
     return sorted(parser_institutions | extra)
 
 @router.get("/owners", response_model=list[str])

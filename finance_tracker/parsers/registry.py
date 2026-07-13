@@ -1,9 +1,12 @@
 from finance_tracker.parsers.base import BaseStatementParser
 from finance_tracker.parsers.icici_bank import ICICIBankParser
 from finance_tracker.parsers.axis_bank import AxisBankParser
+from finance_tracker.parsers.yes_bank import YesBankParser
 from finance_tracker.parsers.kuvera import KuveraParser
 from finance_tracker.parsers.icici_credit_card import ICICICreditCardParser
 from finance_tracker.parsers.axis_credit_card import AxisCreditCardParser
+from finance_tracker.parsers.icici_credit_card_pdf import ICICICreditCardPDFParser
+from finance_tracker.parsers.nj_india import NJIndiaParser   
 
 
 
@@ -11,13 +14,16 @@ from finance_tracker.parsers.axis_credit_card import AxisCreditCardParser
 # To add a new bank: import its parser and add one line here.
 PARSER_REGISTRY: dict[str, type[BaseStatementParser]] = {
     "icici_bank": ICICIBankParser,
-    # "yes_bank":   YesBankParser,     # Phase 2 additions
+    "yes_bank":   YesBankParser,     # Phase 2 additions
     "axis_bank":  AxisBankParser,
     # "hdfc_bank":  HDFCBankParser,
     # "sbi":        SBIParser,
     "kuvera": KuveraParser,
     "icici_credit_card": ICICICreditCardParser,
+    "icici_credit_card_pdf": ICICICreditCardPDFParser,
     "axis_credit_card": AxisCreditCardParser,
+    "nj_india":              NJIndiaParser,
+
 }
 
 

@@ -1,7 +1,7 @@
-from sqlalchemy import String, Date, Numeric, ForeignKey, Index, UniqueConstraint
+from sqlalchemy import String, Date, DateTime, Numeric, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from datetime import date
 from decimal import Decimal
+from datetime import date, datetime
 
 from finance_tracker.database import Base
 
@@ -42,8 +42,10 @@ class MFHolding(Base):
 
 class MFTransaction(Base):
     """
-    Individual buy/sell transactions from Kuvera CSV export.
-    Used for XIRR calculation and transaction history.
+    Individual buy/sell transactions from all MF sources.
+
+    Kuvera fields:   order_type, nav, current_nav  (nullable for NJ India rows)
+    NJ India fields: txn_type, direction, account_id, imported_at  (nullable for Kuvera rows)
     """
 
     __tablename__ = "mf_transactions"
@@ -51,23 +53,32 @@ class MFTransaction(Base):
     __table_args__ = (
         UniqueConstraint("folio_number", "txn_date", "order_type", "units", name="uq_mf_txn"),
         Index("ix_mf_txn_folio", "folio_number"),
+        {"extend_existing": True},
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    folio_number: Mapped[str] = mapped_column(String(50), nullable=False)
-    scheme_name: Mapped[str] = mapped_column(String(300), nullable=False)
-    txn_date: Mapped[date] = mapped_column(Date, nullable=False)
-    order_type: Mapped[str] = mapped_column(String(10), nullable=False)  # buy / sell
-    units: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
-    nav: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
-    current_nav: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
-    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    source_file: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    id:           Mapped[int]           = mapped_column(primary_key=True, autoincrement=True)
+    folio_number: Mapped[str]           = mapped_column(String(50),  nullable=False)
+    scheme_name:  Mapped[str]           = mapped_column(String(300), nullable=False)
+    txn_date:     Mapped[date]          = mapped_column(Date, nullable=False)
+    amount:       Mapped[Decimal]       = mapped_column(Numeric(14, 2), nullable=False)
+    units:        Mapped[Decimal]       = mapped_column(Numeric(16, 4), nullable=False)
+    source_file:  Mapped[str | None]    = mapped_column(String(255), nullable=True)
+
+    # Kuvera-specific — nullable for NJ India rows
+    order_type:  Mapped[str | None]    = mapped_column(String(10),  nullable=True)
+    nav:         Mapped[Decimal | None] = mapped_column(Numeric(14, 4), nullable=True)
+    current_nav: Mapped[Decimal | None] = mapped_column(Numeric(14, 4), nullable=True)
+
+    # NJ India-specific — nullable for Kuvera rows
+    account_id:  Mapped[int | None]    = mapped_column(nullable=True)
+    txn_type:    Mapped[str | None]    = mapped_column(String(50),  nullable=True)
+    direction:   Mapped[str | None]    = mapped_column(String(10),  nullable=True)
+    imported_at: Mapped[datetime | None] = mapped_column(DateTime,  nullable=True)
 
     def __repr__(self) -> str:
         return (
             f"<MFTransaction folio={self.folio_number} "
-            f"{self.order_type} {self.units} units @ {self.nav}>"
+            f"date={self.txn_date} units={self.units} amount={self.amount}>"
         )
     
 class MFNavHistory(Base):
@@ -126,3 +137,61 @@ class StockHolding(Base):
 
     def __repr__(self) -> str:
         return f"<StockHolding symbol={self.symbol} qty={self.quantity} avg={self.avg_buy_price}>"
+
+class StockTransaction(Base):
+    """
+    Individual buy/sell trades from Zerodha tradebook CSV.
+    Used for XIRR calculation and trade history.
+    """
+
+    __tablename__ = "stock_transactions"
+
+    __table_args__ = (
+        UniqueConstraint("trade_id", name="uq_stock_trade"),
+        Index("ix_stock_txn_symbol", "symbol"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
+    )
+    symbol: Mapped[str] = mapped_column(String(30), nullable=False)
+    isin: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    exchange: Mapped[str] = mapped_column(String(10), nullable=False)
+    trade_date: Mapped[date] = mapped_column(Date, nullable=False)
+    trade_type: Mapped[str] = mapped_column(String(10), nullable=False)  # buy / sell
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    trade_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    order_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    source_file: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    @property
+    def amount(self) -> Decimal:
+        return self.quantity * self.price
+
+    def __repr__(self) -> str:
+        return f"<StockTransaction {self.symbol} {self.trade_type} {self.quantity}@{self.price}>"
+
+
+class StockPriceHistory(Base):
+    """
+    Daily closing prices for stocks.
+    Fetched from NSE/BSE API and stored locally.
+    """
+
+    __tablename__ = "stock_price_history"
+
+    __table_args__ = (
+        UniqueConstraint("symbol", "exchange", "price_date", name="uq_stock_price"),
+        Index("ix_stock_price_symbol", "symbol", "exchange"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(30), nullable=False)
+    exchange: Mapped[str] = mapped_column(String(10), nullable=False)
+    price_date: Mapped[date] = mapped_column(Date, nullable=False)
+    close_price: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<StockPrice {self.symbol} {self.price_date} {self.close_price}>"
