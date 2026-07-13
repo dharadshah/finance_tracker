@@ -17,8 +17,9 @@ export default function MutualFundsPage() {
   const [navSummary, setNavSummary] = useState(null)
   const [accounts, setAccounts] = useState([])
   const [selectedAccountId, setSelectedAccountId] = useState('')
+  const [njImporting, setNjImporting] = useState(false)
+  const [njSummary, setNjSummary] = useState(null)
   const { owner } = useOwner()
-
 
   useEffect(() => {
     fetchHoldings()
@@ -28,7 +29,7 @@ export default function MutualFundsPage() {
       if (mfAccounts.length > 0) setSelectedAccountId(mfAccounts[0].id)
     })
   }, [owner])
-  
+
   async function handleRefreshNAV() {
     setRefreshing(true)
     setError(null)
@@ -94,6 +95,29 @@ export default function MutualFundsPage() {
     }
   }
 
+  async function handleImportNJIndia(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    setNjImporting(true)
+    setError(null)
+    setNjSummary(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      if (selectedAccountId) formData.append('account_id', selectedAccountId)
+      const res = await axios.post('/api/mf/import/nj-india', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      setNjSummary(res.data)
+      fetchTransactions()
+    } catch (e) {
+      setError(e.response?.data?.detail || 'NJ India import failed')
+    } finally {
+      setNjImporting(false)
+      e.target.value = ''
+    }
+  }
+
   // Totals
   const totalInvested = holdings.reduce((s, h) => s + h.invested_amount, 0)
   const totalCurrent = holdings.reduce((s, h) => s + h.current_value, 0)
@@ -110,7 +134,8 @@ export default function MutualFundsPage() {
 
   return (
     <div>
-      <div className="flex items-center gap-3">
+      {/* Top bar */}
+      <div className="flex items-center gap-3 mb-4">
         <select
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
           value={selectedAccountId}
@@ -121,6 +146,7 @@ export default function MutualFundsPage() {
             <option key={a.id} value={a.id}>{a.name}</option>
           ))}
         </select>
+
         <button
           onClick={handleRefreshNAV}
           disabled={refreshing}
@@ -128,30 +154,58 @@ export default function MutualFundsPage() {
         >
           {refreshing ? 'Refreshing...' : 'Refresh NAV'}
         </button>
+
         <label className={`cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium ${importing ? 'opacity-50' : ''}`}>
           {importing ? 'Importing...' : 'Import Kuvera CSV'}
           <input type="file" accept=".csv" onChange={handleImport} className="hidden" disabled={importing} />
         </label>
+
+        <label className={`cursor-pointer bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 text-sm font-medium ${njImporting ? 'opacity-50' : ''}`}>
+          {njImporting ? 'Importing...' : 'Import NJ India XLS'}
+          <input type="file" accept=".xls" onChange={handleImportNJIndia} className="hidden" disabled={njImporting} />
+        </label>
       </div>
 
-      {error && <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>}
+      {/* Error */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>
+      )}
 
-      {/* Import summary */}
+      {/* Kuvera import summary */}
       {summary && (
         <div className={`mb-6 bg-white rounded-xl border p-4 ${summary.success ? 'border-green-200' : 'border-red-200'}`}>
-          <h3 className="font-medium mb-3">{summary.success ? '✅ Import Complete' : '❌ Import Failed'}</h3>
+          <h3 className="font-medium mb-3">{summary.success ? 'Import Complete' : 'Import Failed'}</h3>
           <div className="grid grid-cols-4 gap-4 text-sm">
             <div><div className="text-gray-500">Imported</div><div className="font-bold">{summary.transactions_inserted}</div></div>
             <div><div className="text-gray-500">Skipped</div><div className="font-bold">{summary.transactions_skipped}</div></div>
             <div><div className="text-gray-500">Funds</div><div className="font-bold">{summary.funds_count}</div></div>
-            <div><div className="text-gray-500">Period</div><div className="font-bold text-xs">{summary.period_start} – {summary.period_end}</div></div>
+            <div><div className="text-gray-500">Period</div><div className="font-bold text-xs">{summary.period_start} - {summary.period_end}</div></div>
           </div>
+          {summary.errors && summary.errors.length > 0 && (
+            <div className="mt-2 text-xs text-red-500">{summary.errors.join(', ')}</div>
+          )}
         </div>
       )}
 
+      {/* NJ India import summary */}
+      {njSummary && (
+        <div className={`mb-6 bg-white rounded-xl border p-4 ${njSummary.success ? 'border-green-200' : 'border-red-200'}`}>
+          <h3 className="font-medium mb-3">{njSummary.success ? 'NJ India Import Complete' : 'NJ India Import Failed'}</h3>
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div><div className="text-gray-500">Imported</div><div className="font-bold">{njSummary.transactions_inserted}</div></div>
+            <div><div className="text-gray-500">Skipped</div><div className="font-bold">{njSummary.transactions_skipped}</div></div>
+            <div><div className="text-gray-500">Period</div><div className="font-bold text-xs">{njSummary.statement_period}</div></div>
+          </div>
+          {njSummary.errors && njSummary.errors.length > 0 && (
+            <div className="mt-2 text-xs text-red-500">{njSummary.errors.join(', ')}</div>
+          )}
+        </div>
+      )}
+
+      {/* NAV refresh summary */}
       {navSummary && (
         <div className="mb-6 bg-white rounded-xl border border-green-200 p-4">
-          <h3 className="font-medium mb-3">✅ NAV Refreshed</h3>
+          <h3 className="font-medium mb-3">NAV Refreshed</h3>
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div><div className="text-gray-500">Matched</div><div className="font-bold">{navSummary.matched}</div></div>
             <div><div className="text-gray-500">Already Current</div><div className="font-bold">{navSummary.already_current}</div></div>
@@ -168,25 +222,25 @@ export default function MutualFundsPage() {
         </div>
       )}
 
-      {/* Portfolio summary */}
+      {/* Portfolio summary cards */}
       {holdings.length > 0 && (
         <div className="grid grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="text-xs text-gray-500 mb-1">Total Invested</div>
             <div className="text-xl font-bold text-gray-900">
-              ₹{totalInvested.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              Rs.{totalInvested.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
             </div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="text-xs text-gray-500 mb-1">Current Value</div>
             <div className="text-xl font-bold text-gray-900">
-              ₹{totalCurrent.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              Rs.{totalCurrent.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
             </div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="text-xs text-gray-500 mb-1">Total P&L</div>
             <div className={`text-xl font-bold ${totalPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {totalPnl >= 0 ? '+' : ''}₹{totalPnl.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              {totalPnl >= 0 ? '+' : ''}Rs.{totalPnl.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
             </div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -259,18 +313,18 @@ export default function MutualFundsPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{h.folio_number}</td>
                     <td className="px-4 py-3 text-right text-gray-700">{h.units.toFixed(3)}</td>
-                    <td className="px-4 py-3 text-right text-gray-700">₹{h.avg_nav.toFixed(4)}</td>
+                    <td className="px-4 py-3 text-right text-gray-700">Rs.{h.avg_nav.toFixed(4)}</td>
                     <td className="px-4 py-3 text-right text-gray-700">
-                      ₹{h.invested_amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      Rs.{h.invested_amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-700">
-                      ₹{h.current_value.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      Rs.{h.current_value.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                     </td>
                     <td className={`px-4 py-3 text-right font-medium ${h.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {h.pnl >= 0 ? '+' : ''}₹{h.pnl.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      {h.pnl >= 0 ? '+' : ''}Rs.{h.pnl.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                     </td>
                     <td className={`px-4 py-3 text-right font-medium ${(h.xirr || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {h.xirr != null ? `${h.xirr >= 0 ? '+' : ''}${h.xirr.toFixed(2)}%` : '—'}
+                      {h.xirr != null ? `${h.xirr >= 0 ? '+' : ''}${h.xirr.toFixed(2)}%` : '-'}
                     </td>
                     <td className={`px-4 py-3 text-right font-medium ${h.pnl_pct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {h.pnl_pct >= 0 ? '+' : ''}{h.pnl_pct.toFixed(2)}%
@@ -303,31 +357,36 @@ export default function MutualFundsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredTxns.map((t) => (
-                  <tr key={t.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
-                      {new Date(t.txn_date).toLocaleDateString('en-GB').replace(/\//g, '-')}
-                    </td>
-                    <td className="px-4 py-3 text-gray-900 max-w-xs">
-                      <div className="text-sm">{t.scheme_name}</div>
-                      <div className="text-xs text-gray-400">{t.folio_number}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        t.order_type === 'buy'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}>
-                        {t.order_type.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-700">{t.units.toFixed(3)}</td>
-                    <td className="px-4 py-3 text-right text-gray-700">₹{t.nav.toFixed(4)}</td>
-                    <td className="px-4 py-3 text-right font-medium text-gray-900">
-                      ₹{t.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                    </td>
-                  </tr>
-                ))}
+                {filteredTxns.map((t) => {
+                  const typeLabel = t.order_type
+                    ? t.order_type.toUpperCase()
+                    : t.txn_type || t.direction?.toUpperCase() || 'UNKNOWN'
+                  const isBuy = t.order_type === 'buy' || t.direction === 'inflow'
+                  const navDisplay = t.nav != null ? `Rs.${t.nav.toFixed(4)}` : '-'
+                  return (
+                    <tr key={t.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                        {new Date(t.txn_date).toLocaleDateString('en-GB').replace(/\//g, '-')}
+                      </td>
+                      <td className="px-4 py-3 text-gray-900 max-w-xs">
+                        <div className="text-sm">{t.scheme_name}</div>
+                        <div className="text-xs text-gray-400">{t.folio_number}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          isBuy ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                        }`}>
+                          {typeLabel}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-700">{t.units.toFixed(3)}</td>
+                      <td className="px-4 py-3 text-right text-gray-700">{navDisplay}</td>
+                      <td className="px-4 py-3 text-right font-medium text-gray-900">
+                        Rs.{t.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
