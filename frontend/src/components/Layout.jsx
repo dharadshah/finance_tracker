@@ -19,7 +19,16 @@ const navGroups = [
   },
   {
     label: null,
-    items: [{ path: '/mutual-funds', label: 'Mutual Funds' }],
+    items: [
+      { path: '/mutual-funds', label: 'Mutual Funds' },
+      { path: '/mf-investment', label: 'Investment Tracker' },
+    ],
+  },
+  {
+  label: 'Alternative',
+  items: [
+    { path: '/speedforce', label: 'SpeedForce EV' },
+  ],
   },
   {
     label: null,

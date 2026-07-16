@@ -4,6 +4,7 @@ from finance_tracker.models.credit_card import CreditCardDue, DueStatus
 from finance_tracker.models.investment import MFHolding, MFNavHistory, StockHolding
 from finance_tracker.models.net_worth import NetWorthSnapshot
 from finance_tracker.models.categorisation import CategorizationLog, LearnedRule
+from finance_tracker.models.alternative_investment import AlternativeInvestment, AlternativeInvestmentPayment
 
 __all__ = [
     "Account", "AccountType",
@@ -12,4 +13,6 @@ __all__ = [
     "MFHolding", "MFNavHistory", "StockHolding",
     "NetWorthSnapshot",
     "CategorizationLog", "LearnedRule",
+    "AlternativeInvestment", "AlternativeInvestmentPayment",
+
 ]

@@ -220,7 +220,71 @@ def list_mf_transactions(
         txns = session.execute(stmt).scalars().all()
         return [MFTransactionResponse.model_validate(t) for t in txns]
 
+class MFMonthlySummaryRow(BaseModel):
+    month_key:   str        # "2026-06" for sorting
+    month_label: str        # "Jun 2026" for display
+    investment:  float      # sum of lumpsum buys > 10000
+    redemption:  float      # sum of all outflows
+    net:         float      # redemption - investment
 
+
+@router.get("/investment-summary", response_model=list[MFMonthlySummaryRow])
+def get_investment_summary():
+    """
+    Monthly summary of:
+    - Lumpsum MF investments (amount > 10000, order_type=buy)
+    - Alternative investments (SpeedForce etc.)
+    vs redemptions (direction=outflow).
+    Net = Redemption - Investment.
+    """
+    with get_session() as session:
+        from collections import defaultdict
+        from datetime import datetime as dt
+
+        monthly = defaultdict(lambda: {"investment": 0.0, "redemption": 0.0})
+
+        # MF transactions
+        txns = session.execute(
+            select(MFTransaction).order_by(MFTransaction.txn_date)
+        ).scalars().all()
+
+        for t in txns:
+            key = t.txn_date.strftime("%Y-%m")
+            is_lumpsum_buy = (
+                t.order_type == "buy"
+                and t.amount is not None
+                and float(t.amount) > 10000
+            )
+            is_redemption = t.direction == "outflow"
+            if is_lumpsum_buy:
+                monthly[key]["investment"] += float(t.amount)
+            elif is_redemption:
+                monthly[key]["redemption"] += float(t.amount)
+
+        # Alternative investments
+        from finance_tracker.repositories.alternative_investment_repository import (
+            AlternativeInvestmentRepository,
+        )
+        alt_repo = AlternativeInvestmentRepository(session)
+        alt_by_month = alt_repo.get_total_invested_by_month()
+        for key, amount in alt_by_month.items():
+            monthly[key]["investment"] += amount
+
+        result = []
+        for key in sorted(monthly.keys(), reverse=True):
+            label = dt.strptime(key, "%Y-%m").strftime("%b %Y")
+            inv = monthly[key]["investment"]
+            red = monthly[key]["redemption"]
+            result.append(MFMonthlySummaryRow(
+                month_key=key,
+                month_label=label,
+                investment=inv,
+                redemption=red,
+                net=red - inv,
+            ))
+
+        return result
+    
 class NAVFetchSummary(BaseModel):
     fetched:         int
     matched:         int

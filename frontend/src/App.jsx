@@ -9,6 +9,10 @@ import MutualFundsPage from './pages/mutualfunds/MutualFundsPage'
 import DashboardPage from './pages/dashboard/DashboardPage'
 import DividendsPage from './pages/dividends/DividendsPage'
 import StocksPage from './pages/stocks/StocksPage'
+import MFInvestmentTrackerPage from './pages/mutualfunds/MFInvestmentTrackerPage'
+import SpeedForcePage from './pages/alternative/SpeedForcePage'
+
+
 
 
 export default function App() {
@@ -24,6 +28,9 @@ export default function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/dividends" element={<DividendsPage />} />
         <Route path="/stocks" element={<StocksPage />} />
+        <Route path="/mf-investment" element={<MFInvestmentTrackerPage />} />
+        <Route path="/speedforce" element={<SpeedForcePage />} />
+
       </Routes>
     </Layout>
   )
