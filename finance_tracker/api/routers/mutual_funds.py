@@ -336,3 +336,62 @@ def search_nav(q: str):
         if q.lower() in parts[3].lower():
             matches.append({"code": parts[0], "name": parts[3], "nav": parts[4]})
     return matches[:20]
+
+class FundMetadataResponse(BaseModel):
+    id:                 int
+    scheme_code:        str
+    amfi_scheme_name:   str
+    kuvera_scheme_name: str
+    fund_house:         str | None
+    scheme_type:        str | None
+    scheme_category:    str | None
+    asset_class:        str | None
+    sub_category:       str | None
+    last_refreshed:     str
+
+    model_config = {"from_attributes": True}
+
+
+class FundMetadataRefreshSummary(BaseModel):
+    total:   int
+    updated: int
+    skipped: int
+    errors:  list[str]
+
+
+@router.post("/metadata/refresh", response_model=FundMetadataRefreshSummary)
+def refresh_fund_metadata():
+    """
+    Fetches fund metadata from MFAPI for all schemes in mf_holdings.
+    Triggered manually via the Rebalance page refresh button.
+    """
+    from finance_tracker.services.fund_metadata_fetcher import FundMetadataFetcher
+    with get_session() as session:
+        fetcher = FundMetadataFetcher()
+        summary = fetcher.fetch_and_store(session)
+        return FundMetadataRefreshSummary(**summary)
+
+
+@router.get("/metadata", response_model=list[FundMetadataResponse])
+def list_fund_metadata():
+    """Returns all fund metadata records."""
+    from finance_tracker.models.fund_metadata import FundMetadata
+    with get_session() as session:
+        records = session.execute(
+            select(FundMetadata).order_by(FundMetadata.sub_category)
+        ).scalars().all()
+        return [
+            FundMetadataResponse(
+                id=r.id,
+                scheme_code=r.scheme_code,
+                amfi_scheme_name=r.amfi_scheme_name,
+                kuvera_scheme_name=r.kuvera_scheme_name,
+                fund_house=r.fund_house,
+                scheme_type=r.scheme_type,
+                scheme_category=r.scheme_category,
+                asset_class=r.asset_class,
+                sub_category=r.sub_category,
+                last_refreshed=r.last_refreshed.strftime("%d %b %Y %H:%M"),
+            )
+            for r in records
+        ]
