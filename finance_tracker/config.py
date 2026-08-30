@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/finance_tracker.db"
     app_env: str = "development"
     log_level: str = "INFO"
+    groq_api_key: str = ""
 
     @property
     def is_development(self) -> bool:
