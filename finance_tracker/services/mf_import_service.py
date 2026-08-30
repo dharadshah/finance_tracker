@@ -139,10 +139,11 @@ class MFImportService:
 
     def _rebuild_holdings(self, session, account_id: int) -> int:
         """
-        Rebuilds mf_holdings from scratch based on all mf_transactions.
-        Units = sum of buys - sum of sells per folio+scheme.
+        Rebuilds mf_holdings from all mf_transactions.
+        Correctly handles:
+        - NJ India outflow transactions (direction=outflow, order_type=None)
+        - Invested amount = proportional cost basis, not sell proceeds
         """
-        # Find Kuvera account
         from finance_tracker.models.account import Account
         kuvera_account = session.execute(
             select(Account).where(Account.institution == "Kuvera")
@@ -151,56 +152,104 @@ class MFImportService:
             logger.warning("No Kuvera account found — holdings will not be saved")
             return 0
         account_id = kuvera_account.id
-        
-        # Load all transactions
-        txns = session.execute(select(MFTransaction)).scalars().all()
 
-        # Group by folio + scheme
+        txns = session.execute(
+            select(MFTransaction).order_by(MFTransaction.txn_date)
+        ).scalars().all()
+
+        # Group by (folio_number, scheme_name)
         holdings_map: dict[tuple, dict] = {}
+
         for t in txns:
             key = (t.folio_number, t.scheme_name)
-            if key not in holdings_map:
-                holdings_map[key] = {
-                    "units": Decimal("0"),
-                    "invested": Decimal("0"),
-                    "latest_nav": t.current_nav,
-                    "last_date": t.txn_date,
-                }
-            h = holdings_map[key]
-            if t.order_type == "buy":
-                h["units"] += t.units
-                h["invested"] += t.amount
-            elif t.order_type == "sell":
-                h["units"] -= t.units
-                h["invested"] -= t.amount
-            if t.txn_date >= h["last_date"]:
-                h["latest_nav"] = t.current_nav
-                h["last_date"] = t.txn_date
 
-        # Delete all existing holdings and recreate
+            is_buy       = t.order_type == "buy"
+            is_kuvera_sell = t.order_type == "sell"
+            is_nj_outflow  = (t.direction == "outflow" and t.order_type is None)
+
+            if is_buy:
+                if key not in holdings_map:
+                    holdings_map[key] = {
+                        "units_bought": Decimal("0"),
+                        "units_sold":   Decimal("0"),
+                        "cost_basis":   Decimal("0"),
+                        "latest_nav":   t.current_nav or Decimal("0"),
+                        "last_date":    t.txn_date,
+                    }
+                h = holdings_map[key]
+                h["units_bought"] += t.units
+                h["cost_basis"]   += t.amount
+
+            elif is_kuvera_sell:
+                if key not in holdings_map:
+                    holdings_map[key] = {
+                        "units_bought": Decimal("0"),
+                        "units_sold":   Decimal("0"),
+                        "cost_basis":   Decimal("0"),
+                        "latest_nav":   t.current_nav or Decimal("0"),
+                        "last_date":    t.txn_date,
+                    }
+                holdings_map[key]["units_sold"] += abs(t.units)
+
+            elif is_nj_outflow:
+                # Match by folio_number only — NJ India scheme names differ from Kuvera
+                matching_key = next(
+                    (k for k in holdings_map if k[0] == t.folio_number), None
+                )
+                if matching_key:
+                    holdings_map[matching_key]["units_sold"] += abs(t.units)
+                else:
+                    logger.warning(
+                        "NJ India outflow folio %s not found in Kuvera transactions",
+                        t.folio_number,
+                    )
+
+            # Update latest nav
+            if not is_nj_outflow and t.current_nav:
+                h = holdings_map.get(key)
+                if h and t.txn_date >= h["last_date"]:
+                    h["latest_nav"] = t.current_nav
+                    h["last_date"]  = t.txn_date
+
+        # Rebuild holdings
         from sqlalchemy import delete
-        session.execute(delete(MFHolding).where(MFHolding.account_id == account_id))
-        
+        session.execute(
+            delete(MFHolding).where(MFHolding.account_id == account_id)
+        )
+
         from datetime import date as date_type
         today = date_type.today()
+        count = 0
 
         for (folio, scheme), h in holdings_map.items():
-            if h["units"] <= 0:
-                continue  # fully redeemed
-            avg_nav = h["invested"] / h["units"] if h["units"] > 0 else Decimal("0")
+            net_units = h["units_bought"] - h["units_sold"]
+
+            if net_units <= Decimal("0.001"):
+                continue  # fully redeemed or near-zero, skip
+
+            # Proportional cost basis for remaining units
+            if h["units_bought"] > 0:
+                proportion     = net_units / h["units_bought"]
+                invested_amount = h["cost_basis"] * proportion
+            else:
+                invested_amount = Decimal("0")
+
+            avg_nav = invested_amount / net_units if net_units > 0 else Decimal("0")
+
             session.add(MFHolding(
-                account_id=account_id,  # will be updated when we add account selection
-                scheme_code=f"{folio}_{scheme[:20]}",  # using folio as scheme code for now
+                account_id=account_id,
+                scheme_code=f"{folio}_{scheme[:20]}",
                 scheme_name=scheme,
                 folio_number=folio,
-                units=h["units"],
+                units=net_units,
                 avg_nav=avg_nav,
-                invested_amount=h["invested"],
+                invested_amount=invested_amount,
                 last_updated=today,
             ))
+            count += 1
 
         session.flush()
-        return len(holdings_map)
+        return count
 
     @staticmethod
     def _to_decimal(value: str) -> Decimal:

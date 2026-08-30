@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from finance_tracker.database import init_db
 from finance_tracker.api.routers import accounts, transactions, categories, import_, rules, mutual_funds, stocks
 from finance_tracker.api.routers import alt_investments
+from finance_tracker.api.routers import user_profile
+
 
 
 
@@ -36,5 +38,6 @@ app.include_router(rules.router)
 app.include_router(mutual_funds.router)
 app.include_router(stocks.router)
 app.include_router(alt_investments.router)
+app.include_router(user_profile.router)
 
 

@@ -6,6 +6,7 @@ from finance_tracker.models.net_worth import NetWorthSnapshot
 from finance_tracker.models.categorisation import CategorizationLog, LearnedRule
 from finance_tracker.models.alternative_investment import AlternativeInvestment, AlternativeInvestmentPayment
 from finance_tracker.models.fund_metadata import FundMetadata
+from finance_tracker.models.user_profile import UserProfile
 
 __all__ = [
     "Account", "AccountType",
@@ -15,6 +16,7 @@ __all__ = [
     "NetWorthSnapshot",
     "CategorizationLog", "LearnedRule",
     "AlternativeInvestment", "AlternativeInvestmentPayment",
-    "FundMetadata"
+    "FundMetadata",
+    "UserProfile"
 
 ]
