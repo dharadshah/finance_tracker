@@ -11,9 +11,7 @@ import DividendsPage from './pages/dividends/DividendsPage'
 import StocksPage from './pages/stocks/StocksPage'
 import MFInvestmentTrackerPage from './pages/mutualfunds/MFInvestmentTrackerPage'
 import SpeedForcePage from './pages/alternative/SpeedForcePage'
-
-
-
+import RebalancePage from './pages/mutualfunds/RebalancePage'
 
 export default function App() {
   return (
@@ -30,7 +28,7 @@ export default function App() {
         <Route path="/stocks" element={<StocksPage />} />
         <Route path="/mf-investment" element={<MFInvestmentTrackerPage />} />
         <Route path="/speedforce" element={<SpeedForcePage />} />
-
+        <Route path="/rebalance" element={<RebalancePage />} />
       </Routes>
     </Layout>
   )

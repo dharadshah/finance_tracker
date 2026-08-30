@@ -22,6 +22,7 @@ const navGroups = [
     items: [
       { path: '/mutual-funds', label: 'Mutual Funds' },
       { path: '/mf-investment', label: 'Investment Tracker' },
+      { path: '/rebalance', label: 'Rebalance' },
     ],
   },
   {
